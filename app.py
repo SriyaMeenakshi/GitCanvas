@@ -212,10 +212,13 @@ with st.sidebar:
         default_theme = all_themes.get(selected_theme, all_themes["Default"]).copy() # Copy to avoid mutating global
         
         # Helper to get color safely
-        def get_col(key): return default_theme.get(key, "#000000")
+        def get_col(key):
+            val = default_theme.get(key, "000000")
+            return f"#{val}" if not str(val).startswith("#") else val
         
         # Use theme-specific keys so each theme maintains its own customization
-        custom_bg = st.color_picker("Background", value=get_col("bg_color"), key=f"customize_bg_{selected_theme}")
+        def hex_fix(v): return f"#{v}" if not v.startswith("#") else v
+        custom_bg = st.color_picker("Background", value=hex_fix(get_col("bg_color")), key=f"customize_bg_{selected_theme}")
         
         # Validate HEX color format
         if not HEX_COLOR_REGEX.match(custom_bg):

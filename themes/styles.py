@@ -106,6 +106,14 @@ import os
 
 themes_dir = os.path.join(os.path.dirname(__file__), 'json')
 
+def normalize_theme_colors(theme_data):
+    """Ensure hex color values include a leading #."""
+    for key, value in theme_data.items():
+        if key.endswith("_color") and isinstance(value, str) and value and not value.startswith("#"):
+            theme_data[key] = f"#{value}"
+    return theme_data
+
+
 def load_predefined_themes():
     """Load predefined themes from JSON files"""
     if os.path.exists(themes_dir):
@@ -113,7 +121,8 @@ def load_predefined_themes():
             if filename.endswith('.json') and not filename.startswith('custom_'):
                 theme_name = filename[:-5].capitalize()  # Remove .json and capitalize
                 with open(os.path.join(themes_dir, filename), 'r') as f:
-                    THEMES[theme_name] = json.load(f)
+                    theme_data = json.load(f)
+                THEMES[theme_name] = normalize_theme_colors(theme_data)
 
 def load_custom_themes():
     """Load custom themes from custom_*.json files"""
@@ -124,7 +133,8 @@ def load_custom_themes():
                 # Extract theme name from custom_{name}.json
                 theme_name = filename[7:-5].capitalize()  # Remove 'custom_' and '.json'
                 with open(os.path.join(themes_dir, filename), 'r') as f:
-                    custom_themes[theme_name] = json.load(f)
+                    theme_data = json.load(f)
+                custom_themes[theme_name] = normalize_theme_colors(theme_data)
     return custom_themes
 
 def save_custom_theme(theme_name, theme_data):
