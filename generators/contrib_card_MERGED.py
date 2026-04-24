@@ -49,7 +49,7 @@ def _latest_contribution_date(contributions):
             continue
         try:
             parsed = date.fromisoformat(item_date)
-        except Exception:
+        except (TypeError, ValueError):
             continue
         if not max_date or parsed > max_date:
             max_date = parsed
@@ -71,7 +71,7 @@ def _weeks_from_dates(contributions, cols, rows):
             continue
         try:
             parsed = date.fromisoformat(item_date)
-        except Exception:
+        except (TypeError, ValueError):
             continue
         date_counts[parsed] = item.get("count", 0)
 
@@ -126,7 +126,7 @@ def _weeks_to_cells(weeks, cols, rows, max_date):
             if item_date:
                 try:
                     parsed = date.fromisoformat(item_date)
-                except Exception:
+                except (TypeError, ValueError):
                     parsed = None
             is_future = bool(max_date and parsed and parsed > max_date)
             cells.append({
@@ -147,7 +147,7 @@ def _add_timeline_labels(dwg, weeks, cols, rows, start_x, start_y, box_size, gap
         if day and day.get("date"):
             try:
                 day_date = date.fromisoformat(day["date"])
-            except Exception:
+            except (TypeError, ValueError):
                 day_date = None
 
         if not day_date:
