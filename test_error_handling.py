@@ -11,16 +11,21 @@ This script tests:
 
 import requests
 import json
+import os
 from datetime import datetime
+
+from utils.logger import setup_logger
 
 # API base URL
 API_BASE = "http://localhost:8000"
+VERBOSE_TESTS = os.getenv("VERBOSE_TESTS") == "1"
+logger = setup_logger(__name__, level="INFO" if VERBOSE_TESTS else "WARNING")
 
 def test_nonexistent_user():
     """Test API response for non-existent username"""
-    print("\n" + "="*60)
-    print("TEST 1: Non-existent User Handling")
-    print("="*60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TEST 1: Non-existent User Handling")
+    logger.info("%s", "=" * 60)
     
     username = "nonexistentuser_" + datetime.now().strftime("%Y%m%d%H%M%S")
     endpoints = [
@@ -39,29 +44,29 @@ def test_nonexistent_user():
             
             # Check status code
             if response.status_code == 502:
-                print(f"✓ {endpoint}: Correctly returns 502 Bad Gateway")
+                logger.info("PASS %s: Correctly returns 502 Bad Gateway", endpoint)
                 # Check for error header
                 if response.headers.get("X-Error"):
-                    print(f"  ✓ Error header present: {response.headers.get('X-Error')}")
+                    logger.info("  Error header present: %s", response.headers.get("X-Error"))
                 # Check content type is SVG
                 if "image/svg+xml" in response.headers.get("Content-Type", ""):
-                    print(f"  ✓ Returns SVG error card")
+                    logger.info("  Returns SVG error card")
                 else:
-                    print(f"  ✗ Wrong content type: {response.headers.get('Content-Type')}")
+                    logger.error("  Wrong content type: %s", response.headers.get("Content-Type"))
             elif response.status_code == 200:
-                print(f"✗ {endpoint}: Returns 200 (should be 502) - FALLBACK TO MOCK DATA DETECTED")
+                logger.error("FAIL %s: Returns 200 (should be 502) - FALLBACK TO MOCK DATA DETECTED", endpoint)
             else:
-                print(f"? {endpoint}: Returns {response.status_code}")
+                logger.warning("%s: Returns %s", endpoint, response.status_code)
                 
         except Exception as e:
-            print(f"✗ {endpoint}: Error - {e}")
+            logger.error("FAIL %s: Error - %s", endpoint, e)
 
 
 def test_actions_without_auth():
     """Test Actions endpoint requires authentication"""
-    print("\n" + "="*60)
-    print("TEST 2: GitHub Actions Authentication")
-    print("="*60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TEST 2: GitHub Actions Authentication")
+    logger.info("%s", "=" * 60)
     
     url = f"{API_BASE}/api/actions?username=torvalds"
     
@@ -70,23 +75,23 @@ def test_actions_without_auth():
         response = requests.get(url, timeout=10)
         
         if response.status_code == 401:
-            print(f"✓ Actions endpoint correctly returns 401 without token")
+            logger.info("PASS Actions endpoint correctly returns 401 without token")
             if "Unauthorized" in response.text or "authentication" in response.text.lower():
-                print(f"  ✓ Error message mentions authentication")
+                logger.info("  Error message mentions authentication")
         elif response.status_code == 200:
-            print(f"✗ Actions endpoint returns 200 (should require auth) - MOCK DATA RETURNED")
+            logger.error("FAIL Actions endpoint returns 200 (should require auth) - MOCK DATA RETURNED")
         else:
-            print(f"? Actions endpoint returns {response.status_code}")
+            logger.warning("Actions endpoint returns %s", response.status_code)
             
     except Exception as e:
-        print(f"✗ Error: {e}")
+        logger.error("FAIL Error: %s", e)
 
 
 def test_actions_with_auth():
     """Test Actions endpoint with authentication"""
-    print("\n" + "="*60)
-    print("TEST 3: GitHub Actions with Authentication")
-    print("="*60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TEST 3: GitHub Actions with Authentication")
+    logger.info("%s", "=" * 60)
     
     # Using a non-existent user with token to test error handling
     url = f"{API_BASE}/api/actions?username=nonexistentuser_test"
@@ -98,23 +103,23 @@ def test_actions_with_auth():
         response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 502:
-            print(f"✓ Actions endpoint with invalid user returns 502")
+            logger.info("PASS Actions endpoint with invalid user returns 502")
             if response.headers.get("X-Error"):
-                print(f"  ✓ Error header present: {response.headers.get('X-Error')}")
+                logger.info("  Error header present: %s", response.headers.get("X-Error"))
         elif response.status_code == 200:
-            print(f"✗ Actions endpoint returns 200 (should return error for nonexistent user)")
+            logger.error("FAIL Actions endpoint returns 200 (should return error for nonexistent user)")
         else:
-            print(f"? Actions endpoint returns {response.status_code}")
+            logger.warning("Actions endpoint returns %s", response.status_code)
             
     except Exception as e:
-        print(f"✗ Error: {e}")
+        logger.error("FAIL Error: %s", e)
 
 
 def test_error_response_format():
     """Test that error responses are valid SVG"""
-    print("\n" + "="*60)
-    print("TEST 4: Error Response Format")
-    print("="*60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TEST 4: Error Response Format")
+    logger.info("%s", "=" * 60)
     
     url = f"{API_BASE}/api/stats?username=invalid_user_12345"
     
@@ -126,28 +131,28 @@ def test_error_response_format():
             
             # Check if it's valid SVG
             if content.startswith("<svg") and "</svg>" in content:
-                print(f"✓ Error response is valid SVG")
+                logger.info("PASS Error response is valid SVG")
                 
                 # Check for error indicators
                 if "Error" in content or "error" in content.lower():
-                    print(f"  ✓ SVG contains error message")
+                    logger.info("  SVG contains error message")
                 if "!" in content or "exclamation" in content.lower():
-                    print(f"  ✓ SVG contains error icon/indicator")
+                    logger.info("  SVG contains error icon/indicator")
             else:
-                print(f"✗ Response is not valid SVG")
-                print(f"  First 200 chars: {content[:200]}")
+                logger.error("FAIL Response is not valid SVG")
+                logger.error("  First 200 chars: %s", content[:200])
         else:
-            print(f"? Status {response.status_code}, Content-Type: {response.headers.get('Content-Type')}")
+            logger.warning("Status %s, Content-Type: %s", response.status_code, response.headers.get('Content-Type'))
             
     except Exception as e:
-        print(f"✗ Error: {e}")
+        logger.error("FAIL Error: %s", e)
 
 
 def test_cache_not_caching_errors():
     """Test that error responses are not cached"""
-    print("\n" + "="*60)
-    print("TEST 5: Error Response Caching")
-    print("="*60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TEST 5: Error Response Caching")
+    logger.info("%s", "=" * 60)
     
     url = f"{API_BASE}/api/stats?username=nonexistent_user_cache_test"
     
@@ -159,21 +164,21 @@ def test_cache_not_caching_errors():
         cache_control_2 = response2.headers.get("Cache-Control")
         
         if "no-cache" in cache_control_1 or "no-store" in cache_control_1:
-            print(f"✓ Error responses are not cached")
-            print(f"  Cache-Control: {cache_control_1}")
+            logger.info("PASS Error responses are not cached")
+            logger.info("  Cache-Control: %s", cache_control_1)
         else:
-            print(f"✗ Error responses may be cached")
-            print(f"  Cache-Control: {cache_control_1}")
+            logger.error("FAIL Error responses may be cached")
+            logger.error("  Cache-Control: %s", cache_control_1)
             
     except Exception as e:
-        print(f"✗ Error: {e}")
+        logger.error("FAIL Error: %s", e)
 
 
 def test_valid_user_returns_200():
     """Test that valid users still return 200 OK"""
-    print("\n" + "="*60)
-    print("TEST 6: Valid User Returns Success")
-    print("="*60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TEST 6: Valid User Returns Success")
+    logger.info("%s", "=" * 60)
     
     # Using a well-known GitHub user
     url = f"{API_BASE}/api/stats?username=torvalds"
@@ -182,33 +187,33 @@ def test_valid_user_returns_200():
         response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
-            print(f"✓ Valid user returns 200 OK")
+            logger.info("PASS Valid user returns 200 OK")
             if "image/svg+xml" in response.headers.get("Content-Type", ""):
-                print(f"  ✓ Returns SVG content")
+                logger.info("  Returns SVG content")
         else:
-            print(f"? Valid user returns {response.status_code}")
+            logger.warning("Valid user returns %s", response.status_code)
             if response.status_code == 502:
-                print(f"  ✗ GitHub API might be rate-limited or unavailable")
+                logger.error("  GitHub API might be rate-limited or unavailable")
             
     except Exception as e:
-        print(f"✗ Error: {e}")
+        logger.error("FAIL Error: %s", e)
 
 
 if __name__ == "__main__":
-    print("\n🧪 GitCanvas Error Handling Test Suite")
-    print("Testing API error responses and exception handling")
+    logger.info("\nGitCanvas Error Handling Test Suite")
+    logger.info("Testing API error responses and exception handling")
     
     try:
         # Quick health check
         response = requests.get(f"{API_BASE}/", timeout=5)
         if response.status_code == 200:
-            print(f"✓ API is running at {API_BASE}")
+            logger.info("PASS API is running at %s", API_BASE)
         else:
-            print(f"✗ API health check failed: {response.status_code}")
+            logger.error("FAIL API health check failed: %s", response.status_code)
             exit(1)
     except Exception as e:
-        print(f"✗ Cannot reach API at {API_BASE}: {e}")
-        print("Make sure the API is running: uvicorn api.main:app --reload")
+        logger.error("FAIL Cannot reach API at %s: %s", API_BASE, e)
+        logger.error("Make sure the API is running: uvicorn api.main:app --reload")
         exit(1)
     
     # Run tests
@@ -219,6 +224,6 @@ if __name__ == "__main__":
     test_cache_not_caching_errors()
     test_valid_user_returns_200()
     
-    print("\n" + "="*60)
-    print("✅ Test suite complete!")
-    print("="*60 + "\n")
+    logger.info("\n%s", "=" * 60)
+    logger.info("Test suite complete!")
+    logger.info("%s\n", "=" * 60)
