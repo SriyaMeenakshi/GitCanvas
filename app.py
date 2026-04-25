@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from config.settings import get_settings
 from roast_widget_streamlit import render_roast_widget
-from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card, commit_analysis_card
+from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card, commit_analysis_card, gist_card
 from utils import github_api
 from utils.cache import clear_cache as clear_ttl_cache
 from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
@@ -229,7 +229,7 @@ if custom_colors:
 
 
 # --- Layout: Tabs ---
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs(["Main Stats", "Languages", "Top Repositories", "Contributions", "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges", "🔥 AI Roast", "Recent Activity", "✨ Visual Elements", "🏆 Trophy", "⚙️ Actions", "🧠 Commit Analysis"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs(["Main Stats", "Languages", "Top Repositories", "Contributions", "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges", "🔥 AI Roast", "Recent Activity", "✨ Visual Elements", "🏆 Trophy", "⚙️ Actions", "🧠 Commit Analysis", "🧩 Gist Embedder"])
 
 def show_code_area(code_content, label="Markdown Code"):
     st.markdown(f"**{label}** (Copy below)")
@@ -341,8 +341,9 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
         query_str = "&".join(params)
         if query_str:
             query_str = "?" + query_str
-
-        url = f"https://gitcanvas-api.vercel.app/api/{endpoint}{query_str}&username={username}"
+            url = f"https://gitcanvas-api.vercel.app/api/{endpoint}{query_str}&username={username}"
+        else:
+            url = f"https://gitcanvas-api.vercel.app/api/{endpoint}?username={username}"
         
         # Generate code based on output format
         if output_format == "HTML":
@@ -804,3 +805,83 @@ with tab13:
         code_template="![Commit Message Analysis]({url})",
         output_format=output_format
     )
+
+with tab14:
+    st.subheader("🧩 Gist Embedder")
+    st.markdown("Embed your GitHub Gists as stylish cards in your profile README.")
+
+    @st.cache_data(ttl=3600)
+    def load_user_gists_data(user, token=None, _cache_version="v1"):
+        gists = github_api.get_user_gists(user, token, limit=20)
+        if not gists:
+            st.info("Using mock gist data for demonstration (API unavailable or no public gists).")
+            gists = github_api.get_mock_gists(user)
+        return gists
+
+    @st.cache_data(ttl=1800)
+    def load_gist_preview(gist_id, file_name=None, token=None, max_lines=8, _cache_version="v1"):
+        preview = github_api.get_gist_file_preview(gist_id, file_name=file_name, token=token, max_lines=max_lines)
+        if not preview:
+            preview = github_api.get_mock_gist_preview(gist_id, file_name=file_name)
+        return preview
+
+    gists = load_user_gists_data(username if username else "torvalds", effective_github_token or None)
+
+    if not gists:
+        st.warning("No gists found for this user.")
+    else:
+        gist_options = []
+        gist_lookup = {}
+        for gist in gists:
+            gist_id = gist.get("id", "")
+            desc = gist.get("description", "Untitled Gist")
+            option_label = f"{desc[:60]} ({gist_id[:8]})"
+            gist_options.append(option_label)
+            gist_lookup[option_label] = gist
+
+        selected_gist_label = st.selectbox("Choose a Gist", gist_options)
+        selected_gist = gist_lookup[selected_gist_label]
+
+        selected_gist_id = selected_gist.get("id", "")
+        files = selected_gist.get("files", [])
+        file_names = [f.get("filename", "") for f in files if f.get("filename")]
+        selected_file = st.selectbox("Select File", file_names if file_names else [""], index=0)
+
+        c1, c2, c3 = st.columns(3)
+        style_variant = c1.selectbox("Card Style", ["code", "compact"], index=0)
+        show_description = c2.checkbox("Show Description", value=True)
+        max_lines = c3.slider("Preview Lines", min_value=3, max_value=12, value=8)
+
+        gist_preview_data = load_gist_preview(
+            selected_gist_id,
+            file_name=selected_file,
+            token=effective_github_token or None,
+            max_lines=max_lines,
+        )
+
+        svg_bytes = gist_card.draw_gist_card(
+            gist_preview_data,
+            selected_theme,
+            custom_colors,
+            style_variant=style_variant,
+            show_description=show_description,
+        )
+
+        render_tab(
+            svg_bytes,
+            "gists",
+            username,
+            selected_theme,
+            custom_colors,
+            code_template=(
+                "![Gist Card]({url}&gist_id="
+                + selected_gist_id
+                + "&file_name="
+                + selected_file
+                + "&style="
+                + style_variant
+                + ("&show_description=true" if show_description else "&show_description=false")
+                + f"&max_lines={max_lines})"
+            ),
+            output_format=output_format,
+        )

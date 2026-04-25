@@ -974,3 +974,193 @@ def get_mock_actions_data(username):
         'username': username,
         'data_source': 'mock'
     }
+
+
+@cache_github_api
+def get_user_gists(username, token=None, limit=20):
+    """
+    Fetch a user's public gists and normalize minimal metadata for cards/UI.
+    """
+    headers = get_github_headers(token)
+    url = f"https://api.github.com/users/{username}/gists?per_page={limit}"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        log_api_call(logger, url, resp.status_code, has_token=bool(token))
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch gists for {username}: {e}")
+        return []
+
+    if resp.status_code != 200:
+        logger.warning(f"Gists API returned status {resp.status_code} for {username}")
+        return []
+
+    try:
+        payload = resp.json()
+    except ValueError as e:
+        logger.error(f"Invalid JSON from gists API for {username}: {e}")
+        return []
+
+    if not isinstance(payload, list):
+        return []
+
+    gists = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+
+        gist_id = item.get("id", "")
+        html_url = item.get("html_url", "")
+        description = (item.get("description") or "Untitled Gist").strip()
+        updated_at = item.get("updated_at", "")
+        files = item.get("files", {}) or {}
+
+        file_entries = []
+        if isinstance(files, dict):
+            for filename, meta in files.items():
+                meta = meta or {}
+                file_entries.append({
+                    "filename": filename,
+                    "language": meta.get("language") or "Text",
+                    "raw_url": meta.get("raw_url", ""),
+                    "size": meta.get("size", 0),
+                    "type": meta.get("type", ""),
+                    "truncated": bool(meta.get("truncated", False)),
+                })
+
+        gists.append({
+            "id": gist_id,
+            "description": description,
+            "html_url": html_url,
+            "updated_at": updated_at,
+            "public": bool(item.get("public", True)),
+            "files": file_entries,
+            "file_count": len(file_entries),
+        })
+
+    return gists
+
+
+@cache_github_api
+def get_gist_file_preview(gist_id, file_name=None, token=None, max_lines=8, max_chars=500):
+    """
+    Fetch a gist and return metadata + short preview for one selected file.
+    """
+    headers = get_github_headers(token)
+    url = f"https://api.github.com/gists/{gist_id}"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        log_api_call(logger, url, resp.status_code, has_token=bool(token))
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch gist details for {gist_id}: {e}")
+        return None
+
+    if resp.status_code != 200:
+        logger.warning(f"Gist details API returned status {resp.status_code} for {gist_id}")
+        return None
+
+    try:
+        payload = resp.json()
+    except ValueError:
+        return None
+
+    files = payload.get("files", {}) or {}
+    if not isinstance(files, dict) or not files:
+        return None
+
+    chosen_name = file_name if file_name in files else next(iter(files.keys()))
+    selected = files.get(chosen_name, {}) or {}
+
+    content = selected.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raw_url = selected.get("raw_url")
+        if raw_url:
+            try:
+                raw_resp = requests.get(raw_url, timeout=10)
+                if raw_resp.status_code == 200:
+                    content = raw_resp.text
+            except requests.RequestException:
+                content = ""
+
+    content = content or ""
+    lines = content.splitlines()
+    snippet = "\n".join(lines[:max_lines])
+    if len(snippet) > max_chars:
+        snippet = snippet[:max_chars].rstrip() + "..."
+
+    return {
+        "id": payload.get("id", gist_id),
+        "description": (payload.get("description") or "Untitled Gist").strip(),
+        "html_url": payload.get("html_url", ""),
+        "updated_at": payload.get("updated_at", ""),
+        "filename": chosen_name,
+        "language": selected.get("language") or "Text",
+        "size": selected.get("size", 0),
+        "preview": snippet,
+    }
+
+
+def get_mock_gists(username):
+    """Returns mock gist metadata for local previews when API is unavailable."""
+    return [
+        {
+            "id": "mock-gist-1",
+            "description": f"Utility snippets by {username}",
+            "html_url": "https://gist.github.com/mock-gist-1",
+            "updated_at": "2026-04-20T10:00:00Z",
+            "public": True,
+            "file_count": 2,
+            "files": [
+                {
+                    "filename": "quick_sort.py",
+                    "language": "Python",
+                    "raw_url": "",
+                    "size": 420,
+                    "type": "text/plain",
+                    "truncated": False,
+                },
+                {
+                    "filename": "README.md",
+                    "language": "Markdown",
+                    "raw_url": "",
+                    "size": 180,
+                    "type": "text/markdown",
+                    "truncated": False,
+                },
+            ],
+        },
+        {
+            "id": "mock-gist-2",
+            "description": "Shell aliases and helpers",
+            "html_url": "https://gist.github.com/mock-gist-2",
+            "updated_at": "2026-04-18T08:30:00Z",
+            "public": True,
+            "file_count": 1,
+            "files": [
+                {
+                    "filename": "aliases.sh",
+                    "language": "Shell",
+                    "raw_url": "",
+                    "size": 250,
+                    "type": "text/plain",
+                    "truncated": False,
+                },
+            ],
+        },
+    ]
+
+
+def get_mock_gist_preview(gist_id, file_name=None):
+    """Returns a mock gist preview block for fallback rendering."""
+    selected_name = file_name or "quick_sort.py"
+    return {
+        "id": gist_id,
+        "description": "Mock gist preview",
+        "html_url": f"https://gist.github.com/{gist_id}",
+        "updated_at": "2026-04-20T10:00:00Z",
+        "filename": selected_name,
+        "language": "Python",
+        "size": 420,
+        "preview": "def quick_sort(items):\n    if len(items) <= 1:\n        return items\n    pivot = items[len(items) // 2]\n    left = [x for x in items if x < pivot]\n    mid = [x for x in items if x == pivot]\n    right = [x for x in items if x > pivot]\n    return quick_sort(left) + mid + quick_sort(right)",
+    }

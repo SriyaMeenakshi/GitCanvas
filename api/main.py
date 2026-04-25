@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import FastAPI, Response, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from config.settings import get_settings
-from generators import stats_card, lang_card, contrib_card, recent_activity_card, trophy_card, streak_card, repo_card, social_card, badge_generator, actions_card, commit_analysis_card
+from generators import stats_card, lang_card, contrib_card, recent_activity_card, trophy_card, streak_card, repo_card, social_card, badge_generator, actions_card, commit_analysis_card, gist_card
 from utils import github_api
 from utils.cache import cache_svg_response, get_cache_stats, clear_cache
 from utils.validators import (
@@ -801,6 +801,63 @@ async def get_commit_analysis(
         analysis_data,
         theme,
         custom_colors=custom_colors,
+    )
+    return svg_response(svg_content, request)
+
+
+@app.get("/api/gists")
+async def get_gist_card(
+    request: Request,
+    username: str,
+    gist_id: Optional[str] = None,
+    file_name: Optional[str] = None,
+    style: str = "code",
+    show_description: bool = True,
+    max_lines: int = 8,
+    theme: str = "Default",
+    bg_color: Optional[str] = None,
+    title_color: Optional[str] = None,
+    text_color: Optional[str] = None,
+    border_color: Optional[str] = None
+):
+    """Get gist embed card as SVG."""
+    username = validate_username(username)
+    theme = validate_theme(theme)
+    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+    token = get_token_from_header(request)
+
+    style = style if style in {"code", "compact"} else "code"
+    if max_lines < 3:
+        max_lines = 3
+    if max_lines > 12:
+        max_lines = 12
+
+    selected_gist_id = gist_id
+    if not selected_gist_id:
+        gists = github_api.get_user_gists(username, token, limit=1)
+        if not gists:
+            gists = github_api.get_mock_gists(username)
+        if not gists:
+            raise HTTPException(status_code=404, detail="No gists found for this user")
+        selected_gist_id = gists[0].get("id")
+
+    gist_data = github_api.get_gist_file_preview(
+        selected_gist_id,
+        file_name=file_name,
+        token=token,
+        max_lines=max_lines,
+    )
+
+    if not gist_data:
+        gist_data = github_api.get_mock_gist_preview(selected_gist_id, file_name=file_name)
+
+    svg_content = generate_cached_svg(
+        gist_card.draw_gist_card,
+        gist_data,
+        theme,
+        custom_colors=custom_colors,
+        style_variant=style,
+        show_description=show_description,
     )
     return svg_response(svg_content, request)
 
