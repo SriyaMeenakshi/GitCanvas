@@ -1,0 +1,15 @@
+{
+    "bg_color": "0d0d0d",
+    "border_color": "ff00ff",
+    "title_color": "ff00ff",
+    "text_color": "e0e0e0",
+    "icon_color": "00ffff",
+    "title_font_size": 20,
+    "text_font_size": 14,
+    "tags": [
+        "dark",
+        "neon",
+        "colorful",
+        "aesthetic"
+    ]
+}
