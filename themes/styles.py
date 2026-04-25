@@ -102,6 +102,7 @@ THEMES = {
 }
 import json
 import os
+from pathlib import Path
 from themes.aurora_gradient import AURORA_GRADIENT
 
 
