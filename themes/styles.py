@@ -102,6 +102,7 @@ THEMES = {
 }
 import json
 import os
+from themes.aurora_gradient import AURORA_GRADIENT
 
 
 themes_dir = os.path.join(os.path.dirname(__file__), 'json')
@@ -182,6 +183,7 @@ THEMES["Retro"] = {
     "title_font_size": 18,
     "text_font_size": 14
 }
-
+THEMES.pop("Aurora_gradient", None)
+THEMES["Aurora Gradient"] = AURORA_GRADIENT.copy()
 # Load custom themes on module import
 CUSTOM_THEMES = load_custom_themes()

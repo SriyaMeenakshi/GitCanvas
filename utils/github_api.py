@@ -7,7 +7,7 @@ import streamlit as st
 
 try:
     from dotenv import load_dotenv
-except Exception:
+except ImportError:
     load_dotenv = None
 
 from utils.logger import setup_logger, log_api_call
@@ -142,7 +142,7 @@ def fetch_github_graphql(username, token=None):
     if not token:
         try:
             token = st.secrets.get("GITHUB_TOKEN")
-        except Exception:
+        except (AttributeError, KeyError, RuntimeError, TypeError):
             token = None
         if not token:
             token = os.getenv("GITHUB_TOKEN")
@@ -305,7 +305,7 @@ def get_github_headers(token=None):
     if not token:
         try:
             token = st.secrets.get("GITHUB_TOKEN")
-        except Exception:
+        except (AttributeError, KeyError, RuntimeError, TypeError):
             token = None
         if not token:
             token = os.getenv("GITHUB_TOKEN")
@@ -682,12 +682,16 @@ def fetch_sparkline_data(username, token=None):
         if response.status_code == 200:
             events = response.json()
             for event in events:
-                if event['type'] == 'PushEvent':
-                    date = event['created_at'].split('T')[0]
-                    if date in daily_commits:
-                        daily_commits[date] += event['payload'].get('distinct_size', 0)
-    except:
-        pass
+                try:
+                    if event.get('type') == 'PushEvent':
+                        date = event.get('created_at', '').split('T')[0]
+                        if date in daily_commits:
+                            daily_commits[date] += event.get('payload', {}).get('distinct_size', 0)
+                except (AttributeError, KeyError, TypeError) as e:
+                    logger.warning(f"Skipping malformed event for {username}: {e}")
+                    continue
+    except (requests.RequestException, ValueError, TypeError) as e:
+        logger.warning(f"Failed to fetch sparkline data for {username}: {e}")
     
     # Return as a list of counts from oldest to newest
     return [daily_commits[date] for date in reversed(dates)]
@@ -711,7 +715,7 @@ def get_github_actions_data(username, token=None):
         # Try to get token from streamlit secrets or environment
         try:
             token = st.secrets.get("GITHUB_TOKEN")
-        except Exception:
+        except (AttributeError, KeyError, RuntimeError, TypeError):
             # Secrets file not found or not accessible
             token = None
         

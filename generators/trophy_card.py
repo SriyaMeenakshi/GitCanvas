@@ -23,7 +23,7 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None):
             years_contributing = (datetime.now() - created_date).days // 365
             if years_contributing < 1:
                 years_contributing = 1
-        except Exception:
+        except (TypeError, ValueError):
             years_contributing = 1
     
     # Determine repository quality tier

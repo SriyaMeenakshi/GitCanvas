@@ -10,6 +10,9 @@ from config.settings import get_settings
 try:
     import google.generativeai as genai  # type: ignore
     _HAS_GENAI = True
+except ImportError:
+    genai = None
+    _HAS_GENAI = False
 except Exception:
     genai = None
     _HAS_GENAI = False
