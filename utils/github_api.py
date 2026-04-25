@@ -1,6 +1,8 @@
 import requests
 import os
 import logging
+import re
+from collections import Counter
 from .cache import cache_github_api
 import streamlit as st
 
@@ -25,6 +27,163 @@ GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
 
 if load_dotenv:
     load_dotenv()
+
+
+COMMIT_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into",
+    "is", "it", "of", "on", "or", "that", "the", "to", "with", "this", "these", "those",
+    "your", "our", "their", "my", "me", "we", "you", "i", "its", "was", "were", "will",
+    "can", "cannot", "should", "would", "could", "mr", "mrs", "feat", "fix", "chore", "docs",
+    "test", "tests", "ci", "wip", "merge", "branch", "pull", "request", "update", "updated",
+    "add", "added", "remove", "removed", "changes", "change"
+}
+
+
+def _extract_words_from_messages(messages):
+    words = []
+    for message in messages:
+        if not message:
+            continue
+        tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9_+-]*", message.lower())
+        words.extend(t for t in tokens if len(t) > 2 and t not in COMMIT_STOPWORDS)
+    return words
+
+
+def analyze_commit_messages(messages):
+    """Summarize commit-message patterns for the commit analysis card."""
+    clean_messages = [m.strip() for m in messages if isinstance(m, str) and m.strip()]
+    count = len(clean_messages)
+    if count == 0:
+        return {
+            "commit_messages": [],
+            "total_messages": 0,
+            "average_length": 0.0,
+            "common_words": [],
+            "mood": "No Signal",
+            "mood_score": 0.0,
+        }
+
+    avg_length = round(sum(len(m) for m in clean_messages) / count, 1)
+    word_counts = Counter(_extract_words_from_messages(clean_messages))
+    common_words = [{"word": word, "count": freq} for word, freq in word_counts.most_common(15)]
+
+    mood_keywords = {
+        "Shipping": {"ship", "release", "deploy", "feat", "feature", "launch", "merge"},
+        "Bug Hunting": {"fix", "bug", "hotfix", "patch", "revert", "rollback", "resolve"},
+        "Refactoring": {"refactor", "cleanup", "clean", "optimize", "improve", "simplify"},
+        "Maintenance": {"chore", "deps", "dependency", "docs", "test", "ci", "build"},
+    }
+
+    mood_scores = {mood: 0 for mood in mood_keywords}
+    for message in clean_messages:
+        lowered = message.lower()
+        for mood, keywords in mood_keywords.items():
+            mood_scores[mood] += sum(1 for keyword in keywords if keyword in lowered)
+
+    dominant_mood = max(mood_scores, key=mood_scores.get)
+    max_score = mood_scores[dominant_mood]
+    mood = dominant_mood if max_score > 0 else "General Coding"
+    mood_score = round((max_score / count) * 100, 1) if count > 0 else 0.0
+
+    return {
+        "commit_messages": clean_messages,
+        "total_messages": count,
+        "average_length": avg_length,
+        "common_words": common_words,
+        "mood": mood,
+        "mood_score": mood_score,
+    }
+
+
+@cache_github_api
+def get_commit_history(username, token=None, max_repos=6, commits_per_repo=20, max_messages=120):
+    """
+    Fetch commit messages across a user's recently updated public repositories.
+
+    Returns analyzed commit-message stats and extracted messages.
+    """
+    headers = get_github_headers(token)
+    repos_url = f"https://api.github.com/users/{username}/repos?per_page={max_repos}&sort=updated"
+
+    try:
+        repos_resp = requests.get(repos_url, headers=headers, timeout=10)
+        log_api_call(logger, repos_url, repos_resp.status_code, has_token=bool(token))
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch repositories for commit history: {e}")
+        return analyze_commit_messages([])
+
+    if repos_resp.status_code != 200:
+        logger.warning(f"Commit history repos fetch failed with status {repos_resp.status_code}")
+        return analyze_commit_messages([])
+
+    try:
+        repos = repos_resp.json()
+    except ValueError as e:
+        logger.error(f"Invalid JSON while fetching repos for commit history: {e}")
+        return analyze_commit_messages([])
+
+    if not isinstance(repos, list):
+        return analyze_commit_messages([])
+
+    messages = []
+    seen_shas = set()
+
+    for repo in repos:
+        if not isinstance(repo, dict):
+            continue
+        repo_name = repo.get("name")
+        if not repo_name:
+            continue
+
+        commits_url = (
+            f"https://api.github.com/repos/{username}/{repo_name}/commits"
+            f"?author={username}&per_page={commits_per_repo}"
+        )
+
+        try:
+            commits_resp = requests.get(commits_url, headers=headers, timeout=10)
+            log_api_call(logger, commits_url, commits_resp.status_code, has_token=bool(token))
+        except requests.RequestException as e:
+            logger.warning(f"Failed to fetch commits for {repo_name}: {e}")
+            continue
+
+        if commits_resp.status_code != 200:
+            continue
+
+        try:
+            commits = commits_resp.json()
+        except ValueError:
+            continue
+
+        if not isinstance(commits, list):
+            continue
+
+        for commit in commits:
+            if not isinstance(commit, dict):
+                continue
+
+            sha = commit.get("sha")
+            if sha and sha in seen_shas:
+                continue
+            if sha:
+                seen_shas.add(sha)
+
+            full_message = (
+                commit.get("commit", {})
+                .get("message", "")
+            )
+            message = full_message.split("\n")[0].strip() if isinstance(full_message, str) else ""
+            if not message:
+                continue
+
+            messages.append(message)
+            if len(messages) >= max_messages:
+                break
+
+        if len(messages) >= max_messages:
+            break
+
+    return analyze_commit_messages(messages)
 
 
 def calculate_streak_data(contributions):

@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from config.settings import get_settings
 from roast_widget_streamlit import render_roast_widget
-from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card
+from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card, commit_analysis_card
 from utils import github_api
 from utils.cache import clear_cache as clear_ttl_cache
 from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
@@ -229,7 +229,7 @@ if custom_colors:
 
 
 # --- Layout: Tabs ---
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs(["Main Stats", "Languages", "Top Repositories", "Contributions", "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges", "🔥 AI Roast", "Recent Activity", "✨ Visual Elements", "🏆 Trophy", "⚙️ Actions"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs(["Main Stats", "Languages", "Top Repositories", "Contributions", "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges", "🔥 AI Roast", "Recent Activity", "✨ Visual Elements", "🏆 Trophy", "⚙️ Actions", "🧠 Commit Analysis"])
 
 def show_code_area(code_content, label="Markdown Code"):
     st.markdown(f"**{label}** (Copy below)")
@@ -778,3 +778,29 @@ with tab12:
         render_tab(svg_bytes, "actions", username, selected_theme, custom_colors, code_template="![GitHub Actions Stats]({url})", output_format=output_format)
     else:
         st.error("Failed to load GitHub Actions data. Please ensure you have a valid GitHub token with Actions access.")
+
+with tab13:
+    st.subheader("🧠 Commit Message Analysis")
+    st.markdown("Analyze your commit tone, common words, and message style patterns.")
+
+    @st.cache_data(ttl=3600)
+    def load_commit_analysis_data(user, token=None, _cache_version="v1"):
+        return github_api.get_commit_history(user, token)
+
+    commit_analysis_data = load_commit_analysis_data(username if username else "torvalds", effective_github_token or None)
+    commit_analysis_data["username"] = username if username else "torvalds"
+
+    svg_bytes = commit_analysis_card.draw_commit_analysis_card(
+        commit_analysis_data,
+        selected_theme,
+        custom_colors
+    )
+    render_tab(
+        svg_bytes,
+        "commit-analysis",
+        username,
+        selected_theme,
+        custom_colors,
+        code_template="![Commit Message Analysis]({url})",
+        output_format=output_format
+    )
