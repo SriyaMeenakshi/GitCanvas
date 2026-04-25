@@ -108,23 +108,35 @@ from themes.aurora_gradient import AURORA_GRADIENT
 themes_dir = Path(__file__).parent / "json"
 themes_dir.mkdir(exist_ok=True)
 
+def normalize_theme_colors(theme_data):
+    """Ensure hex color values include a leading #."""
+    for key, value in theme_data.items():
+        if key.endswith("_color") and isinstance(value, str) and value and not value.startswith("#"):
+            theme_data[key] = f"#{value}"
+    return theme_data
+
+
 def load_predefined_themes():
     """Load predefined themes from JSON files"""
-    for theme_file in themes_dir.iterdir():
-        if theme_file.is_file() and theme_file.suffix == ".json" and not theme_file.name.startswith("custom_"):
-            theme_name = theme_file.stem.capitalize()  # Remove .json and capitalize
-            with theme_file.open('r') as f:
-                THEMES[theme_name] = json.load(f)
+    if os.path.exists(themes_dir):
+        for filename in os.listdir(themes_dir):
+            if filename.endswith('.json') and not filename.startswith('custom_'):
+                theme_name = filename[:-5].capitalize()  # Remove .json and capitalize
+                with open(os.path.join(themes_dir, filename), 'r') as f:
+                    theme_data = json.load(f)
+                THEMES[theme_name] = normalize_theme_colors(theme_data)
 
 def load_custom_themes():
     """Load custom themes from custom_*.json files"""
     custom_themes = {}
-    for theme_file in themes_dir.iterdir():
-        if theme_file.is_file() and theme_file.name.startswith('custom_') and theme_file.suffix == '.json':
-            # Extract theme name from custom_{name}.json
-            theme_name = theme_file.stem[7:].capitalize()  # Remove 'custom_' and '.json'
-            with theme_file.open('r') as f:
-                custom_themes[theme_name] = json.load(f)
+    if os.path.exists(themes_dir):
+        for filename in os.listdir(themes_dir):
+            if filename.startswith('custom_') and filename.endswith('.json'):
+                # Extract theme name from custom_{name}.json
+                theme_name = filename[7:-5].capitalize()  # Remove 'custom_' and '.json'
+                with open(os.path.join(themes_dir, filename), 'r') as f:
+                    theme_data = json.load(f)
+                custom_themes[theme_name] = normalize_theme_colors(theme_data)
     return custom_themes
 
 def save_custom_theme(theme_name, theme_data):
