@@ -20,3 +20,13 @@ def test_aurora_gradient_theme_is_registered_with_tags():
     aurora_theme = themes["Aurora Gradient"]
     tags = aurora_theme.get("tags", [])
     assert "aurora" in [tag.lower() for tag in tags]
+
+
+def test_midnight_theme_has_required_schema():
+    themes = get_all_themes()
+    assert "Midnight" in themes
+
+    midnight_theme = themes["Midnight"]
+    assert "font_family" in midnight_theme
+    assert isinstance(midnight_theme["font_family"], str)
+    assert midnight_theme["font_family"].strip() != ""
