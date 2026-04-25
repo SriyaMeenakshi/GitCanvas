@@ -14,6 +14,9 @@ try:
 except ImportError:
     genai = None
     _HAS_GENAI = False
+except Exception:
+    genai = None
+    _HAS_GENAI = False
 
 logger = setup_logger(__name__)
 
