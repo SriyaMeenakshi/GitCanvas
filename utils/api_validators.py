@@ -256,7 +256,7 @@ def safe_get_nested_value(data: Dict[str, Any], path: List[str], default: Any = 
                 return default
             current = current[key]
         return current
-    except Exception:
+    except (AttributeError, KeyError, IndexError, TypeError):
         return default
 
 

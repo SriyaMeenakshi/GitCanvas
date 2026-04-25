@@ -11,6 +11,9 @@ import logging
 try:
     import google.generativeai as genai
     _HAS_GENAI = True
+except ImportError:
+    genai = None
+    _HAS_GENAI = False
 except Exception:
     genai = None
     _HAS_GENAI = False
