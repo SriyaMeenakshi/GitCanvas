@@ -4,6 +4,7 @@
     "title_color": "f0f0f0",
     "text_color": "cccccc",
     "icon_color": "888888",
+    "font_family": "Segoe UI, Ubuntu, Sans-Serif",
     "title_font_size": 20,
     "text_font_size": 14,
     "tags": [
