@@ -20,3 +20,35 @@ def test_aurora_gradient_theme_is_registered_with_tags():
     aurora_theme = themes["Aurora Gradient"]
     tags = aurora_theme.get("tags", [])
     assert "aurora" in [tag.lower() for tag in tags]
+
+
+def test_midnight_theme_has_required_schema():
+    themes = get_all_themes()
+    assert "Midnight" in themes
+
+    midnight_theme = themes["Midnight"]
+    assert "font_family" in midnight_theme
+    assert isinstance(midnight_theme["font_family"], str)
+    assert midnight_theme["font_family"].strip() != ""
+
+
+def test_new_aesthetic_calm_minimal_themes_have_required_schema():
+    themes = get_all_themes()
+    new_theme_names = [
+        "Aesthetic_glass",
+        "Aesthetic_neon",
+        "Aesthetic_sunset",
+        "Calm_lavender",
+        "Calm_ocean",
+        "Calm_sand",
+        "Minimal_dark",
+        "Minimal_light",
+        "Minimal_mono",
+    ]
+
+    for theme_name in new_theme_names:
+        assert theme_name in themes
+        theme = themes[theme_name]
+        assert "font_family" in theme
+        assert isinstance(theme["font_family"], str)
+        assert theme["font_family"].strip() != ""
