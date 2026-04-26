@@ -9,6 +9,7 @@ from reportlab.graphics import renderPM
 from io import BytesIO
 import tempfile
 import os
+import re
 from config.settings import get_settings
 from generators import stats_card, lang_card, contrib_card, recent_activity_card, trophy_card, streak_card, repo_card, social_card, badge_generator, actions_card
 from utils import github_api
@@ -34,6 +35,85 @@ def svg_to_image(svg_string: str, fmt: str) -> bytes:
     buf = BytesIO()
     renderPM.drawToFile(drawing, buf, fmt=fmt.upper())
     return buf.getvalue()
+
+
+def inject_svg_animations(svg_string: str) -> str:
+    """Inject SMIL animation definitions into an SVG string."""
+    if not svg_string or "<svg" not in svg_string:
+        return svg_string
+
+    rect_animate = (
+        '<animate attributeName="stroke-opacity" values="0.4;1;0.4" '
+        'dur="3s" repeatCount="indefinite"/>'
+    )
+    drop_shadow_filter = (
+        '<filter id="animated-drop-shadow" x="-20%" y="-20%" '
+        'width="140%" height="140%">'
+        '<feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000" '
+        'flood-opacity="0.4">'
+        '<animate attributeName="stdDeviation" values="3;8;3" dur="3s" '
+        'repeatCount="indefinite"/>'
+        '</feDropShadow>'
+        '</filter>'
+    )
+
+    def _inject_rect(match):
+        rect_tag = match.group(1)
+        closing = match.group(2)
+        if closing == "/>":
+            return f"{rect_tag}>{rect_animate}</rect>"
+        return f"{rect_tag}{closing}{rect_animate}"
+
+    svg_string, _ = re.subn(
+        r'(<rect\b[^>]*?)(/?>)',
+        _inject_rect,
+        svg_string,
+        count=1,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    defs_match = re.search(r'(<defs\b.*?</defs>)', svg_string, flags=re.IGNORECASE | re.DOTALL)
+    if defs_match:
+        defs_block = defs_match.group(1)
+        if 'id="animated-drop-shadow"' not in defs_block:
+            updated_defs = re.sub(
+                r'</defs>',
+                f"{drop_shadow_filter}</defs>",
+                defs_block,
+                count=1,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            svg_string = svg_string.replace(defs_block, updated_defs, 1)
+    else:
+        svg_string = re.sub(
+            r'(<svg\b[^>]*?>)',
+            r'\1<defs>' + drop_shadow_filter + '</defs>',
+            svg_string,
+            count=1,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+    if 'id="animated-group"' not in svg_string:
+        group_open = '<g id="animated-group" filter="url(#animated-drop-shadow)">'
+        if re.search(r'<defs\b.*?</defs>', svg_string, flags=re.IGNORECASE | re.DOTALL):
+            svg_string = re.sub(
+                r'(<defs\b.*?</defs>)',
+                r'\1' + group_open,
+                svg_string,
+                count=1,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        else:
+            svg_string = re.sub(
+                r'(<svg\b[^>]*?>)',
+                r'\1' + group_open,
+                svg_string,
+                count=1,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        svg_string = re.sub(r'</svg>', '</g></svg>', svg_string, count=1, flags=re.IGNORECASE)
+
+    return svg_string
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -363,6 +443,7 @@ async def get_stats(
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
     font: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     # Validate inputs
@@ -384,7 +465,16 @@ async def get_stats(
     }
     
     custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
-    svg_content = generate_cached_svg(stats_card.draw_stats_card, data, theme, show_options=show_options, custom_colors=custom_colors, animations_enabled=animations_enabled)
+    svg_content = generate_cached_svg(
+        stats_card.draw_stats_card,
+        data,
+        theme,
+        show_options=show_options,
+        custom_colors=custom_colors,
+        animations_enabled=(animations_enabled or animate),
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -400,6 +490,7 @@ async def get_languages(
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
     font: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     # Validate inputs
@@ -419,7 +510,15 @@ async def get_languages(
     if param_value:
         excluded_languages_list = [lang.strip() for lang in param_value.split(',') if lang.strip()]
     
-    svg_content = generate_cached_svg(lang_card.draw_lang_card, data, theme, custom_colors=custom_colors, excluded_languages=excluded_languages_list)
+    svg_content = generate_cached_svg(
+        lang_card.draw_lang_card,
+        data,
+        theme,
+        custom_colors=custom_colors,
+        excluded_languages=excluded_languages_list,
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -437,6 +536,7 @@ async def get_contributions(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     font: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     # Validate inputs
@@ -459,7 +559,16 @@ async def get_contributions(
             'end': end_date
         }
     
-    svg_content = generate_cached_svg(contrib_card.draw_contrib_card, data, theme, custom_colors=custom_colors, date_range=date_range, animations_enabled=animations_enabled)
+    svg_content = generate_cached_svg(
+        contrib_card.draw_contrib_card,
+        data,
+        theme,
+        custom_colors=custom_colors,
+        date_range=date_range,
+        animations_enabled=(animations_enabled or animate),
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -482,6 +591,7 @@ async def get_calendar_heatmap(
     border_color: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     username = validate_username(username)
@@ -513,8 +623,10 @@ async def get_calendar_heatmap(
         intensity_mode=intensity_mode,
         intensity_colors=heatmap_colors,
         period_label=period,
-        animations_enabled=animations_enabled,
+        animations_enabled=(animations_enabled or animate),
     )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -528,6 +640,7 @@ async def get_recent(
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
     font: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     # Validate inputs
@@ -539,7 +652,14 @@ async def get_recent(
     token = get_token_from_header(request)
     
     custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
-    svg_content = recent_activity_card.draw_recent_activity_card({'username': username}, theme, custom_colors=custom_colors, token=token)
+    svg_content = recent_activity_card.draw_recent_activity_card(
+        {'username': username},
+        theme,
+        custom_colors=custom_colors,
+        token=token,
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -553,6 +673,7 @@ async def get_trophy(
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
     font: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     # Validate inputs
@@ -565,6 +686,8 @@ async def get_trophy(
         return error_response
     custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
     svg_content = trophy_card.draw_trophy_card(data, theme, custom_colors=custom_colors)
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -578,6 +701,7 @@ async def get_streak(
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
     font: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     # Validate inputs
@@ -590,6 +714,8 @@ async def get_streak(
         return error_response
     custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
     svg_content = streak_card.draw_streak_card(data, theme, custom_colors=custom_colors)
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -605,6 +731,7 @@ async def get_repos(
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
     font: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     # Validate inputs
@@ -619,6 +746,8 @@ async def get_repos(
         return error_response
     custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
     svg_content = repo_card.draw_repo_card(data, theme, custom_colors=custom_colors, sort_by=sort_by, limit=limit)
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -638,6 +767,7 @@ async def get_social_card(
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
     font: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     theme = validate_theme(theme)
@@ -676,6 +806,8 @@ async def get_social_card(
         selected_platforms=selected_platforms,
         icon_color=icon_color,
     )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 
@@ -792,6 +924,7 @@ async def get_actions(
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
+    animate: bool = False,
     format: str = "svg",
 ):
     """
@@ -826,7 +959,15 @@ async def get_actions(
         )
         return card_response(svg_content, format, request, status_code=502)
     
-    svg_content = generate_cached_svg(actions_card.draw_actions_card, data, theme, custom_colors=custom_colors)
+    svg_content = generate_cached_svg(
+        actions_card.draw_actions_card,
+        data,
+        theme,
+        custom_colors=custom_colors,
+        animations_enabled=animate,
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
 
 # Cache management endpoints
