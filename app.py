@@ -11,6 +11,7 @@ HEX_COLOR_REGEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
 from dotenv import load_dotenv
 from config.settings import get_settings
 from roast_widget_streamlit import render_roast_widget
+from compliment_widget_streamlit import render_compliment_widget
 from ai.description_generator import generate_github_description
 from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card
 from utils import github_api
@@ -419,10 +420,10 @@ elif font_override:
     custom_colors = {"font_family": font_override}
 
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
     "Main Stats", "Languages", "Top Repositories", "Contributions",
     "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges",
-    "🔥 AI Roast & Summary", "Recent Activity", "✨ Visual Elements",
+    "🔥 AI Roast & Summary", "✨ AI Compliment", "Recent Activity", "✨ Visual Elements",
     "🏆 Trophy", "🎨 Theme Gallery", "📅 Calendar Heatmap",
     "⚙️ GitHub Actions"
 ])
@@ -964,7 +965,24 @@ with tab8:
     else:
         st.info("Click **Generate AI Description** to create a summary for the current theme.")
 
+# AI COMPLIMENT TAB
 with tab9:
+    st.subheader("✨ AI Profile Compliment")
+
+    if not _settings.has_any_llm_key:
+        st.warning(
+            "No **OPENAI_API_KEY** or **GEMINI_API_KEY** in the environment: the AI Compliment tab uses "
+            "built-in fallback lines only until you add a provider key."
+        )
+
+    st.markdown("Let AI celebrate and compliment your GitHub profile!")
+    
+    if username:
+        render_compliment_widget(username, profile_data=data)
+    else:
+        st.warning("Please enter a GitHub username in the sidebar.")
+
+with tab10:
     st.subheader("Recent Activity")
     st.markdown("Shows your last 3 PR or Issue events from GitHub.")
 
@@ -1012,7 +1030,7 @@ with tab9:
         code_label = "HTML Code" if output_format == "HTML" else "Markdown Code"
         show_code_area(code, label=code_label)
 
-with tab10:
+with tab11:
     st.subheader("✨ Visual Elements")
     st.markdown("Add emojis, GIFs, or stickers to your canvas")
 
@@ -1036,8 +1054,8 @@ with tab10:
 
         st.session_state["canvas"].append(svg)
 
-# TAB 11: Trophy Card
-with tab11:
+# TAB 12: Trophy Card
+with tab12:
     st.subheader("🏆 GitHub Trophy")
     st.markdown("Display your achievements including stars, forks, followers, and repository quality tier!")
     
@@ -1052,13 +1070,13 @@ with tab11:
     render_tab(svg_bytes, "trophy", username, selected_theme, custom_colors, code_template="![GitHub Trophy]({url})", output_format=output_format, font_override=font_override)
 
     # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
-with tab12:
+with tab13:
     chosen_theme = render_theme_gallery(all_themes, selected_theme)
     if chosen_theme:
         st.session_state["gallery_selected_theme"] = chosen_theme
         st.rerun()
 
-with tab13:
+with tab14:
     st.subheader("📅 Yearly Calendar Heatmap")
     st.caption("A 53-week contribution heatmap with selectable intensity mapping and custom colors.")
 
@@ -1147,7 +1165,7 @@ with tab13:
         },
     )
 
-with tab14:
+with tab15:
     st.subheader("⚙️ GitHub Actions")
     st.caption("Workflow run totals, success rate, and recent runs from GitHub Actions.")
 
