@@ -51,9 +51,29 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None):
     dwg.add(dwg.image(href=f"data:image/svg+xml;base64,{gh_b64}", insert=(405, 15), size=(24, 24), opacity=0.7))
 
     # Detailed Trophy SVG
-    trophy_group = dwg.g(id="trophy", transform="translate(60, 115)")
+    # Outer group handles positioning so CSS transform animations don't overwrite it
+    trophy_position = dwg.g(id="trophy-pos", transform="translate(60, 115)")
+    
+    # Inner group handles animation
+    trophy_params = {"id": "trophy-anim"}
+    if repo_tier == "Legend":
+        trophy_params["class_"] = "anim-bubble"
+    trophy_group = dwg.g(**trophy_params)
+    
     # Shine effect (ellipse behind trophy doesn't overflow)
-    trophy_group.add(dwg.ellipse(center=(0, 0), r=(35, 45), fill=tier_color, opacity=0.15))
+    shine_params = {"center": (0, 0), "r": (35, 45), "fill": tier_color, "opacity": 0.15}
+    if repo_tier == "Legend":
+        shine_params["class_"] = "anim-pulse-glow"
+    trophy_group.add(dwg.ellipse(**shine_params))
+    
+    # Sparkle effects for Legend tier
+    if repo_tier == "Legend":
+        sparkle_path = "M0,-6 L1.5,-1.5 L6,0 L1.5,1.5 L0,6 L-1.5,1.5 L-6,0 L-1.5,-1.5 Z"
+        for sx, sy, delay in [(-35, -25, "0s"), (35, -15, "0.5s"), (25, 25, "1s"), (-30, 20, "1.5s")]:
+            sg = dwg.g(transform=f"translate({sx}, {sy}) scale(0.6)")
+            sparkle = dwg.path(d=sparkle_path, fill="#FFD700", class_="anim-twinkle", style=f"animation-delay: {delay};")
+            sg.add(sparkle)
+            trophy_group.add(sg)
     # Base
     trophy_group.add(dwg.path(d="M-25,30 h50 v5 a3,3 0 0 1 -3,3 h-44 a3,3 0 0 1 -3,-3 z", fill=icon_color))
     trophy_group.add(dwg.rect(insert=(-12, 18), size=(24, 12), fill=icon_color, rx=2))
@@ -66,7 +86,10 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None):
     trophy_group.add(dwg.path(d="M0,-20 L8,-12 L5,-2 L-5,-2 L-8,-12 Z", fill=theme["bg_color"], opacity=0.5))
     star_path = "M0,-14 L2,-8 L8,-8 L3,-4 L5,2 L0,-1 L-5,2 L-3,-4 L-8,-8 L-2,-8 Z"
     trophy_group.add(dwg.path(d=star_path, fill=tier_color))
-    dwg.add(trophy_group)
+    
+    # Add inner group to outer group, and outer to drawing
+    trophy_position.add(trophy_group)
+    dwg.add(trophy_position)
 
     # Repository Quality Tier Badge
     dwg.add(dwg.text(f"{repo_tier} Tier", insert=(60, 182), fill=tier_color, font_size=15, 
