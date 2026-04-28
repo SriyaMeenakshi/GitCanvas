@@ -1,5 +1,4 @@
 import streamlit as st  # type: ignore
-import streamlit.components.v1 as components
 import base64
 import os
 import re
@@ -454,8 +453,9 @@ def show_code_area(code_content, label="Markdown Code"):
 
 
 def render_embedded_html(html_content: str, *, height: int) -> None:
-    """Render inline HTML using Streamlit's components API."""
-    components.html(html_content, height=height, scrolling=False)
+    """Render embedded HTML in an iframe-backed data URL."""
+    html_b64 = base64.b64encode(html_content.encode("utf-8")).decode("ascii")
+    st.iframe(f"data:text/html;base64,{html_b64}", height=height, scrolling=False)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
     col1, col2 = st.columns([1.5, 1])
