@@ -89,8 +89,9 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
     # Validate username to prevent KeyError
     username = data.get('username', 'Unknown')
     
-    # Add CSS animations if enabled (basic support only)
-    # Note: Advanced animation features disabled due to svgwrite validation constraints
+    # Add CSS animations if enabled
+    if animations_enabled:
+        dwg.defs.add(dwg.style(CSS_ANIMATIONS))
     
     # Background (with optional border pulse)
     bg_params = {

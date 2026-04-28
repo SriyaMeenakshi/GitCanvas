@@ -3,7 +3,7 @@ from themes.styles import THEMES
 from .svg_base import create_svg_base
 
 
-def draw_trophy_card(data, theme_name="Default", custom_colors=None):
+def draw_trophy_card(data, theme_name="Default", custom_colors=None, animations_enabled=True):
     """
     Generates the GitHub Trophy Card SVG showing achievements.
     """
@@ -37,7 +37,7 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None):
     
     # Validate username to prevent KeyError
     username = data.get('username', 'Unknown')
-    dwg, theme = create_svg_base(theme_name, custom_colors, width, height, f"{username}'s Trophy")
+    dwg, theme = create_svg_base(theme_name, custom_colors, width, height, f"{username}'s Trophy", animations_enabled=animations_enabled)
     
     font_family = theme["font_family"]
     text_color = theme["text_color"]
@@ -56,13 +56,13 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None):
     
     # Inner group handles animation
     trophy_params = {"id": "trophy-anim"}
-    if repo_tier == "Legend":
+    if repo_tier == "Legend" and animations_enabled:
         trophy_params["class_"] = "anim-bubble"
     trophy_group = dwg.g(**trophy_params)
     
     # Shine effect (ellipse behind trophy doesn't overflow)
     shine_params = {"center": (0, 0), "r": (35, 45), "fill": tier_color, "opacity": 0.15}
-    if repo_tier == "Legend":
+    if repo_tier == "Legend" and animations_enabled:
         shine_params["class_"] = "anim-pulse-glow"
     trophy_group.add(dwg.ellipse(**shine_params))
     
