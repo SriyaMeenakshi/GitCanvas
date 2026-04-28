@@ -114,10 +114,12 @@ def render_compliment_widget(username: str, profile_data: dict[str, Any] | None 
         # Header
         st.markdown('<div class="compliment-header">✨ AI Compliment</div>', unsafe_allow_html=True)
         st.markdown('<div class="compliment-subtitle">Celebrate this amazing GitHub profile</div>', unsafe_allow_html=True)
+
+        compliment_state_key = f"compliment_data_{username}"
         
         # Initialize session state
-        if 'compliment_data' not in st.session_state:
-            st.session_state.compliment_data = None
+        if compliment_state_key not in st.session_state:
+            st.session_state[compliment_state_key] = None
         
         # Generate button
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -135,7 +137,7 @@ def render_compliment_widget(username: str, profile_data: dict[str, Any] | None 
                         if source_profile:
                             # Generate compliment
                             compliment_result = generate_profile_compliment(source_profile)
-                            st.session_state.compliment_data = {
+                            st.session_state[compliment_state_key] = {
                                 'compliment': compliment_result['compliment'],
                                 'profile': source_profile,
                                 'source': compliment_result['source']
@@ -150,9 +152,9 @@ def render_compliment_widget(username: str, profile_data: dict[str, Any] | None 
                         st.error(f"Unexpected error generating compliment: {type(e).__name__}. Please try again.")
         
         # Display compliment if available
-        if st.session_state.compliment_data:
-            compliment_text = st.session_state.compliment_data['compliment']
-            profile = st.session_state.compliment_data['profile']
+        if st.session_state[compliment_state_key]:
+            compliment_text = st.session_state[compliment_state_key]['compliment']
+            profile = st.session_state[compliment_state_key]['profile']
             
             # Compliment display
             st.markdown(f'<div class="compliment-text">"{compliment_text}"</div>', unsafe_allow_html=True)
@@ -164,7 +166,7 @@ def render_compliment_widget(username: str, profile_data: dict[str, Any] | None 
                     with st.spinner("✨ Generating new compliment..."):
                         try:
                             compliment_result = generate_profile_compliment(profile)
-                            st.session_state.compliment_data['compliment'] = compliment_result['compliment']
+                            st.session_state[compliment_state_key]['compliment'] = compliment_result['compliment']
                             st.rerun()
                         except requests.RequestException as e:
                             st.error(f"Network error: {type(e).__name__}. Unable to generate new compliment.")
