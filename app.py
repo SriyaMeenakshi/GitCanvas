@@ -1,12 +1,9 @@
 import streamlit as st  # type: ignore
+import streamlit.components.v1 as components
 import base64
 import os
 import re
 import requests
-from io import BytesIO
-
-import cairosvg
-from PIL import Image
 
 # HEX color regex validation pattern
 HEX_COLOR_REGEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
@@ -456,20 +453,8 @@ def show_code_area(code_content, label="Markdown Code"):
 
 
 def render_embedded_html(html_content: str, *, height: int) -> None:
-    """Render embedded HTML using Streamlit markdown rendering."""
-    st.markdown(html_content, unsafe_allow_html=True)
-
-
-def _svg_to_png_bytes(svg_text: str) -> bytes:
-    return cairosvg.svg2png(bytestring=svg_text.encode("utf-8"))
-
-
-def _svg_to_jpeg_bytes(svg_text: str) -> bytes:
-    png_bytes = _svg_to_png_bytes(svg_text)
-    image = Image.open(BytesIO(png_bytes)).convert("RGB")
-    output = BytesIO()
-    image.save(output, format="JPEG", quality=90)
-    return output.getvalue()
+    """Render embedded HTML using Streamlit's components API."""
+    components.html(html_content, height=height, scrolling=False)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
     col1, col2 = st.columns([1.5, 1])
@@ -487,27 +472,71 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
             use_container_width=True
         )
 
-        # --- PNG & JPEG Download generated server-side to avoid browser component APIs ---
-        png_bytes = _svg_to_png_bytes(svg_bytes)
-        jpeg_bytes = _svg_to_jpeg_bytes(svg_bytes)
+        # --- PNG & JPEG Download via browser Canvas (no system dependencies) ---
+        svg_b64 = base64.b64encode(svg_bytes.encode("utf-8")).decode("utf-8")
+        filename_prefix_safe = f"{endpoint}_{username}"
 
-        download_col1, download_col2 = st.columns(2)
-        with download_col1:
-            st.download_button(
-                label="⬇️ Download PNG",
-                data=png_bytes,
-                file_name=f"{endpoint}_{username}.png",
-                mime="image/png",
-                use_container_width=True,
-            )
-        with download_col2:
-            st.download_button(
-                label="⬇️ Download JPEG",
-                data=jpeg_bytes,
-                file_name=f"{endpoint}_{username}.jpeg",
-                mime="image/jpeg",
-                use_container_width=True,
-            )
+        render_embedded_html(f"""
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
+            <button onclick="downloadSVGAs('png')" style="
+                width:100%; padding:8px; font-size:14px; cursor:pointer;
+                background:#1a1a2e; color:white; border:1px solid #444;
+                border-radius:6px;">
+                ⬇️ Download PNG
+            </button>
+            <button onclick="downloadSVGAs('jpeg')" style="
+                width:100%; padding:8px; font-size:14px; cursor:pointer;
+                background:#1a1a2e; color:white; border:1px solid #444;
+                border-radius:6px;">
+                ⬇️ Download JPEG
+            </button>
+        </div>
+
+        <script>
+        function downloadSVGAs(format) {{
+            const svgText = atob('{svg_b64}');
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+            const svgEl = svgDoc.documentElement;
+
+            const vb = svgEl.getAttribute('viewBox');
+            let w = 800, h = 400;
+            if (vb) {{
+                const parts = vb.split(/[\\s,]+/);
+                w = parseFloat(parts[2]) || 800;
+                h = parseFloat(parts[3]) || 400;
+            }}
+
+            const blob = new Blob([svgText], {{type: 'image/svg+xml'}});
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = function() {{
+                const SCALE = 4;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = w * SCALE;
+                canvas.height = h * SCALE;
+                const ctx = canvas.getContext('2d');
+
+                if (format === 'jpeg') {{
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }}
+
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                canvas.toBlob(function(blob) {{
+                    const link = document.createElement('a');
+                    link.download = '{filename_prefix_safe}' + (format === 'jpeg' ? '.jpeg' : '.png');
+                    link.href = URL.createObjectURL(blob);
+                    link.click();
+                    URL.revokeObjectURL(url);
+                }}, 'image/' + format, 1.0);
+            }};
+            img.src = url;
+        }}
+        </script>
+        """, height=150)
 
     with col2:
         st.subheader("Integration")
