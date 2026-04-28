@@ -5,6 +5,7 @@ import re
 from collections import Counter
 from .cache import cache_github_api
 import streamlit as st
+import traceback
 
 
 try:
