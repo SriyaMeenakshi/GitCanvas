@@ -586,8 +586,9 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
         query_str = "&".join(params)
         if query_str:
             query_str = "?" + query_str
-
-        url = f"https://gitcanvas-api.vercel.app/api/{endpoint}{query_str}&username={username}"
+            url = f"https://gitcanvas-api.vercel.app/api/{endpoint}{query_str}&username={username}"
+        else:
+            url = f"https://gitcanvas-api.vercel.app/api/{endpoint}?username={username}"
         
         # Generate code based on output format
         if output_format == "HTML":
