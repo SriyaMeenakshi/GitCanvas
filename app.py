@@ -3,7 +3,6 @@ import streamlit.components.v1 as components
 import base64
 import os
 import re
-import json
 import requests
 
 # HEX color regex validation pattern
@@ -139,7 +138,10 @@ with st.sidebar:
     custom_theme_names = list(CUSTOM_THEMES.keys())
     
     # Combine with custom themes at the end
-    theme_options = predefined_themes + custom_theme_names
+    theme_options = sorted(
+        predefined_themes + custom_theme_names,
+        key=lambda name: name.replace("_", " ").lower(),
+    )
     
     # ── Custom Font Override (Issue #174) ────────────────────────────────────
     st.markdown("**Font Override**")
@@ -172,10 +174,22 @@ with st.sidebar:
     # Filter buttons (pills)
     selected_tags = st.pills("Filter by tag", options=all_tags, selection_mode="multi", key="theme_tags")
 
+    if st.button("Reset Theme Filters", key="reset_theme_filters", use_container_width=True):
+        st.session_state["theme_search"] = ""
+        st.session_state["theme_tags"] = []
+        st.rerun()
+
     # Apply filters to theme_options
     def matches_filter(name, props):
         theme_tags = props.get("tags", [])
-        search_match = not theme_search or theme_search.lower() in name.lower() or any(theme_search.lower() in t.lower() for t in theme_tags)
+        search_term = (theme_search or "").strip().lower()
+        normalized_name = name.replace("_", " ").lower()
+        search_match = (
+            not search_term
+            or search_term in normalized_name
+            or search_term in name.lower()
+            or any(search_term in t.lower() for t in theme_tags)
+        )
         
         if not selected_tags:
             tag_match = True
@@ -203,7 +217,13 @@ with st.sidebar:
     except ValueError:
         default_idx = 0
 
-    selected_theme = st.selectbox("Select Theme", filtered_theme_options, index=default_idx, key="current_theme_selection")
+    selected_theme = st.selectbox(
+        "Select Theme",
+        filtered_theme_options,
+        index=default_idx,
+        key="current_theme_selection",
+        format_func=lambda name: name.replace("_", " "),
+    )
     
     # Customization Expander
     # Ensure custom_colors exists even if the expander isn't opened
@@ -434,7 +454,7 @@ def show_code_area(code_content, label="Markdown Code"):
 
 
 def render_embedded_html(html_content: str, *, height: int) -> None:
-    """Render inline HTML using Streamlit's components API."""
+    """Render embedded HTML using Streamlit's components API."""
     components.html(html_content, height=height, scrolling=False)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
@@ -455,7 +475,7 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
 
         # --- PNG & JPEG Download via browser Canvas (no system dependencies) ---
         svg_b64 = base64.b64encode(svg_bytes.encode("utf-8")).decode("utf-8")
-        filename_prefix_safe = json.dumps(f"{endpoint}_{username}")
+        filename_prefix_safe = f"{endpoint}_{username}"
 
         render_embedded_html(f"""
         <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
@@ -499,18 +519,16 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
                 canvas.height = h * SCALE;
                 const ctx = canvas.getContext('2d');
 
-                // Optional: fill white background for JPEG
                 if (format === 'jpeg') {{
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }}
 
-                // Draw image preserving aspect ratio
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                 canvas.toBlob(function(blob) {{
                     const link = document.createElement('a');
-                    link.download = {filename_prefix_safe} + (format === 'jpeg' ? '.jpeg' : '.png');
+                    link.download = '{filename_prefix_safe}' + (format === 'jpeg' ? '.jpeg' : '.png');
                     link.href = URL.createObjectURL(blob);
                     link.click();
                     URL.revokeObjectURL(url);
@@ -566,8 +584,9 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
         query_str = "&".join(params)
         if query_str:
             query_str = "?" + query_str
-
-        url = f"https://gitcanvas-api.vercel.app/api/{endpoint}{query_str}&username={username}"
+            url = f"https://gitcanvas-api.vercel.app/api/{endpoint}{query_str}&username={username}"
+        else:
+            url = f"https://gitcanvas-api.vercel.app/api/{endpoint}?username={username}"
         
         # Generate code based on output format
         if output_format == "HTML":

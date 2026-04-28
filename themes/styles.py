@@ -102,9 +102,12 @@ THEMES = {
 }
 import json
 import os
+from pathlib import Path
+from themes.aurora_gradient import AURORA_GRADIENT
 
 
-themes_dir = os.path.join(os.path.dirname(__file__), 'json')
+themes_dir = Path(__file__).parent / "json"
+themes_dir.mkdir(exist_ok=True)
 
 def normalize_theme_colors(theme_data):
     """Ensure hex color values include a leading #."""
@@ -142,9 +145,9 @@ def save_custom_theme(theme_name, theme_data):
     # Sanitize theme name for filename
     safe_name = theme_name.lower().replace(' ', '_').replace('-', '_')
     filename = f"custom_{safe_name}.json"
-    filepath = os.path.join(themes_dir, filename)
+    filepath = themes_dir / filename
     
-    with open(filepath, 'w') as f:
+    with filepath.open('w') as f:
         json.dump(theme_data, f, indent=4)
     
     return filename
@@ -182,6 +185,7 @@ THEMES["Retro"] = {
     "title_font_size": 18,
     "text_font_size": 14
 }
-
+THEMES.pop("Aurora_gradient", None)
+THEMES["Aurora Gradient"] = AURORA_GRADIENT.copy()
 # Load custom themes on module import
 CUSTOM_THEMES = load_custom_themes()

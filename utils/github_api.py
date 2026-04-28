@@ -1,13 +1,16 @@
 import requests
 import os
 import logging
+import re
+from collections import Counter
 from .cache import cache_github_api
 import streamlit as st
+import traceback
 
 
 try:
     from dotenv import load_dotenv
-except Exception:
+except ImportError:
     load_dotenv = None
 
 from utils.logger import setup_logger, log_api_call
@@ -58,6 +61,163 @@ class GitHubApiError(GitHubDataError):
 
 if load_dotenv:
     load_dotenv()
+
+
+COMMIT_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into",
+    "is", "it", "of", "on", "or", "that", "the", "to", "with", "this", "these", "those",
+    "your", "our", "their", "my", "me", "we", "you", "i", "its", "was", "were", "will",
+    "can", "cannot", "should", "would", "could", "mr", "mrs", "feat", "fix", "chore", "docs",
+    "test", "tests", "ci", "wip", "merge", "branch", "pull", "request", "update", "updated",
+    "add", "added", "remove", "removed", "changes", "change"
+}
+
+
+def _extract_words_from_messages(messages):
+    words = []
+    for message in messages:
+        if not message:
+            continue
+        tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9_+-]*", message.lower())
+        words.extend(t for t in tokens if len(t) > 2 and t not in COMMIT_STOPWORDS)
+    return words
+
+
+def analyze_commit_messages(messages):
+    """Summarize commit-message patterns for the commit analysis card."""
+    clean_messages = [m.strip() for m in messages if isinstance(m, str) and m.strip()]
+    count = len(clean_messages)
+    if count == 0:
+        return {
+            "commit_messages": [],
+            "total_messages": 0,
+            "average_length": 0.0,
+            "common_words": [],
+            "mood": "No Signal",
+            "mood_score": 0.0,
+        }
+
+    avg_length = round(sum(len(m) for m in clean_messages) / count, 1)
+    word_counts = Counter(_extract_words_from_messages(clean_messages))
+    common_words = [{"word": word, "count": freq} for word, freq in word_counts.most_common(15)]
+
+    mood_keywords = {
+        "Shipping": {"ship", "release", "deploy", "feat", "feature", "launch", "merge"},
+        "Bug Hunting": {"fix", "bug", "hotfix", "patch", "revert", "rollback", "resolve"},
+        "Refactoring": {"refactor", "cleanup", "clean", "optimize", "improve", "simplify"},
+        "Maintenance": {"chore", "deps", "dependency", "docs", "test", "ci", "build"},
+    }
+
+    mood_scores = {mood: 0 for mood in mood_keywords}
+    for message in clean_messages:
+        lowered = message.lower()
+        for mood, keywords in mood_keywords.items():
+            mood_scores[mood] += sum(1 for keyword in keywords if keyword in lowered)
+
+    dominant_mood = max(mood_scores, key=mood_scores.get)
+    max_score = mood_scores[dominant_mood]
+    mood = dominant_mood if max_score > 0 else "General Coding"
+    mood_score = round((max_score / count) * 100, 1) if count > 0 else 0.0
+
+    return {
+        "commit_messages": clean_messages,
+        "total_messages": count,
+        "average_length": avg_length,
+        "common_words": common_words,
+        "mood": mood,
+        "mood_score": mood_score,
+    }
+
+
+@cache_github_api
+def get_commit_history(username, token=None, max_repos=6, commits_per_repo=20, max_messages=120):
+    """
+    Fetch commit messages across a user's recently updated public repositories.
+
+    Returns analyzed commit-message stats and extracted messages.
+    """
+    headers = get_github_headers(token)
+    repos_url = f"https://api.github.com/users/{username}/repos?per_page={max_repos}&sort=updated"
+
+    try:
+        repos_resp = requests.get(repos_url, headers=headers, timeout=10)
+        log_api_call(logger, repos_url, repos_resp.status_code, has_token=bool(token))
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch repositories for commit history: {e}")
+        return analyze_commit_messages([])
+
+    if repos_resp.status_code != 200:
+        logger.warning(f"Commit history repos fetch failed with status {repos_resp.status_code}")
+        return analyze_commit_messages([])
+
+    try:
+        repos = repos_resp.json()
+    except ValueError as e:
+        logger.error(f"Invalid JSON while fetching repos for commit history: {e}")
+        return analyze_commit_messages([])
+
+    if not isinstance(repos, list):
+        return analyze_commit_messages([])
+
+    messages = []
+    seen_shas = set()
+
+    for repo in repos:
+        if not isinstance(repo, dict):
+            continue
+        repo_name = repo.get("name")
+        if not repo_name:
+            continue
+
+        commits_url = (
+            f"https://api.github.com/repos/{username}/{repo_name}/commits"
+            f"?author={username}&per_page={commits_per_repo}"
+        )
+
+        try:
+            commits_resp = requests.get(commits_url, headers=headers, timeout=10)
+            log_api_call(logger, commits_url, commits_resp.status_code, has_token=bool(token))
+        except requests.RequestException as e:
+            logger.warning(f"Failed to fetch commits for {repo_name}: {e}")
+            continue
+
+        if commits_resp.status_code != 200:
+            continue
+
+        try:
+            commits = commits_resp.json()
+        except ValueError:
+            continue
+
+        if not isinstance(commits, list):
+            continue
+
+        for commit in commits:
+            if not isinstance(commit, dict):
+                continue
+
+            sha = commit.get("sha")
+            if sha and sha in seen_shas:
+                continue
+            if sha:
+                seen_shas.add(sha)
+
+            full_message = (
+                commit.get("commit", {})
+                .get("message", "")
+            )
+            message = full_message.split("\n")[0].strip() if isinstance(full_message, str) else ""
+            if not message:
+                continue
+
+            messages.append(message)
+            if len(messages) >= max_messages:
+                break
+
+        if len(messages) >= max_messages:
+            break
+
+    return analyze_commit_messages(messages)
 
 
 def calculate_streak_data(contributions):
@@ -142,7 +302,7 @@ def fetch_github_graphql(username, token=None):
     if not token:
         try:
             token = st.secrets.get("GITHUB_TOKEN")
-        except Exception:
+        except (AttributeError, KeyError, RuntimeError, TypeError):
             token = None
         if not token:
             token = os.getenv("GITHUB_TOKEN")
@@ -305,7 +465,7 @@ def get_github_headers(token=None):
     if not token:
         try:
             token = st.secrets.get("GITHUB_TOKEN")
-        except Exception:
+        except (AttributeError, KeyError, RuntimeError, TypeError):
             token = None
         if not token:
             token = os.getenv("GITHUB_TOKEN")
@@ -682,12 +842,16 @@ def fetch_sparkline_data(username, token=None):
         if response.status_code == 200:
             events = response.json()
             for event in events:
-                if event['type'] == 'PushEvent':
-                    date = event['created_at'].split('T')[0]
-                    if date in daily_commits:
-                        daily_commits[date] += event['payload'].get('distinct_size', 0)
-    except:
-        pass
+                try:
+                    if event.get('type') == 'PushEvent':
+                        date = event.get('created_at', '').split('T')[0]
+                        if date in daily_commits:
+                            daily_commits[date] += event.get('payload', {}).get('distinct_size', 0)
+                except (AttributeError, KeyError, TypeError) as e:
+                    logger.warning(f"Skipping malformed event for {username}: {e}")
+                    continue
+    except (requests.RequestException, ValueError, TypeError) as e:
+        logger.warning(f"Failed to fetch sparkline data for {username}: {e}")
     
     # Return as a list of counts from oldest to newest
     return [daily_commits[date] for date in reversed(dates)]
@@ -711,7 +875,7 @@ def get_github_actions_data(username, token=None):
         # Try to get token from streamlit secrets or environment
         try:
             token = st.secrets.get("GITHUB_TOKEN")
-        except Exception:
+        except (AttributeError, KeyError, RuntimeError, TypeError):
             # Secrets file not found or not accessible
             token = None
         
@@ -893,4 +1057,194 @@ def get_mock_actions_data(username):
         ],
         'username': username,
         'data_source': 'mock'
+    }
+
+
+@cache_github_api
+def get_user_gists(username, token=None, limit=20):
+    """
+    Fetch a user's public gists and normalize minimal metadata for cards/UI.
+    """
+    headers = get_github_headers(token)
+    url = f"https://api.github.com/users/{username}/gists?per_page={limit}"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        log_api_call(logger, url, resp.status_code, has_token=bool(token))
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch gists for {username}: {e}")
+        return []
+
+    if resp.status_code != 200:
+        logger.warning(f"Gists API returned status {resp.status_code} for {username}")
+        return []
+
+    try:
+        payload = resp.json()
+    except ValueError as e:
+        logger.error(f"Invalid JSON from gists API for {username}: {e}")
+        return []
+
+    if not isinstance(payload, list):
+        return []
+
+    gists = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+
+        gist_id = item.get("id", "")
+        html_url = item.get("html_url", "")
+        description = (item.get("description") or "Untitled Gist").strip()
+        updated_at = item.get("updated_at", "")
+        files = item.get("files", {}) or {}
+
+        file_entries = []
+        if isinstance(files, dict):
+            for filename, meta in files.items():
+                meta = meta or {}
+                file_entries.append({
+                    "filename": filename,
+                    "language": meta.get("language") or "Text",
+                    "raw_url": meta.get("raw_url", ""),
+                    "size": meta.get("size", 0),
+                    "type": meta.get("type", ""),
+                    "truncated": bool(meta.get("truncated", False)),
+                })
+
+        gists.append({
+            "id": gist_id,
+            "description": description,
+            "html_url": html_url,
+            "updated_at": updated_at,
+            "public": bool(item.get("public", True)),
+            "files": file_entries,
+            "file_count": len(file_entries),
+        })
+
+    return gists
+
+
+@cache_github_api
+def get_gist_file_preview(gist_id, file_name=None, token=None, max_lines=8, max_chars=500):
+    """
+    Fetch a gist and return metadata + short preview for one selected file.
+    """
+    headers = get_github_headers(token)
+    url = f"https://api.github.com/gists/{gist_id}"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        log_api_call(logger, url, resp.status_code, has_token=bool(token))
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch gist details for {gist_id}: {e}")
+        return None
+
+    if resp.status_code != 200:
+        logger.warning(f"Gist details API returned status {resp.status_code} for {gist_id}")
+        return None
+
+    try:
+        payload = resp.json()
+    except ValueError:
+        return None
+
+    files = payload.get("files", {}) or {}
+    if not isinstance(files, dict) or not files:
+        return None
+
+    chosen_name = file_name if file_name in files else next(iter(files.keys()))
+    selected = files.get(chosen_name, {}) or {}
+
+    content = selected.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raw_url = selected.get("raw_url")
+        if raw_url:
+            try:
+                raw_resp = requests.get(raw_url, timeout=10)
+                if raw_resp.status_code == 200:
+                    content = raw_resp.text
+            except requests.RequestException:
+                content = ""
+
+    content = content or ""
+    lines = content.splitlines()
+    snippet = "\n".join(lines[:max_lines])
+    if len(snippet) > max_chars:
+        snippet = snippet[:max_chars].rstrip() + "..."
+
+    return {
+        "id": payload.get("id", gist_id),
+        "description": (payload.get("description") or "Untitled Gist").strip(),
+        "html_url": payload.get("html_url", ""),
+        "updated_at": payload.get("updated_at", ""),
+        "filename": chosen_name,
+        "language": selected.get("language") or "Text",
+        "size": selected.get("size", 0),
+        "preview": snippet,
+    }
+
+
+def get_mock_gists(username):
+    """Returns mock gist metadata for local previews when API is unavailable."""
+    return [
+        {
+            "id": "mock-gist-1",
+            "description": f"Utility snippets by {username}",
+            "html_url": "https://gist.github.com/mock-gist-1",
+            "updated_at": "2026-04-20T10:00:00Z",
+            "public": True,
+            "file_count": 2,
+            "files": [
+                {
+                    "filename": "quick_sort.py",
+                    "language": "Python",
+                    "raw_url": "",
+                    "size": 420,
+                    "type": "text/plain",
+                    "truncated": False,
+                },
+                {
+                    "filename": "README.md",
+                    "language": "Markdown",
+                    "raw_url": "",
+                    "size": 180,
+                    "type": "text/markdown",
+                    "truncated": False,
+                },
+            ],
+        },
+        {
+            "id": "mock-gist-2",
+            "description": "Shell aliases and helpers",
+            "html_url": "https://gist.github.com/mock-gist-2",
+            "updated_at": "2026-04-18T08:30:00Z",
+            "public": True,
+            "file_count": 1,
+            "files": [
+                {
+                    "filename": "aliases.sh",
+                    "language": "Shell",
+                    "raw_url": "",
+                    "size": 250,
+                    "type": "text/plain",
+                    "truncated": False,
+                },
+            ],
+        },
+    ]
+
+
+def get_mock_gist_preview(gist_id, file_name=None):
+    """Returns a mock gist preview block for fallback rendering."""
+    selected_name = file_name or "quick_sort.py"
+    return {
+        "id": gist_id,
+        "description": "Mock gist preview",
+        "html_url": f"https://gist.github.com/{gist_id}",
+        "updated_at": "2026-04-20T10:00:00Z",
+        "filename": selected_name,
+        "language": "Python",
+        "size": 420,
+        "preview": "def quick_sort(items):\n    if len(items) <= 1:\n        return items\n    pivot = items[len(items) // 2]\n    left = [x for x in items if x < pivot]\n    mid = [x for x in items if x == pivot]\n    right = [x for x in items if x > pivot]\n    return quick_sort(left) + mid + quick_sort(right)",
     }

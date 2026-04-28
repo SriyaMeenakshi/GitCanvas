@@ -4,14 +4,13 @@ from typing import Optional
 from fastapi import FastAPI, Response, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from svglib.svglib import svg2rlg
-from reportlab.graphics import renderPM
-from io import BytesIO
-import tempfile
 import os
+from io import BytesIO
+import cairosvg
+from PIL import Image
 import re
 from config.settings import get_settings
-from generators import stats_card, lang_card, contrib_card, recent_activity_card, trophy_card, streak_card, repo_card, social_card, badge_generator, actions_card
+from generators import stats_card, lang_card, contrib_card, recent_activity_card, trophy_card, streak_card, repo_card, social_card, badge_generator, actions_card, commit_analysis_card
 from utils import github_api
 from utils.error_card import draw_error_card
 from utils.cache import cache_svg_response, get_cache_stats, clear_cache
@@ -27,14 +26,25 @@ from utils.validators import (
 
 
 def svg_to_image(svg_string: str, fmt: str) -> bytes:
-    with tempfile.NamedTemporaryFile(suffix='.svg', delete=False) as f:
-        f.write(svg_string.encode())
-        tmp_path = f.name
-    drawing = svg2rlg(tmp_path)
-    os.unlink(tmp_path)
-    buf = BytesIO()
-    renderPM.drawToFile(drawing, buf, fmt=fmt.upper())
-    return buf.getvalue()
+    """Convert SVG string to image bytes using CairoSVG + Pillow.
+
+    Supports 'PNG' and 'JPEG'. Returns raw image bytes.
+    """
+    target = fmt.lower()
+    # Generate PNG bytes from SVG
+    png_bytes = cairosvg.svg2png(bytestring=svg_string.encode("utf-8"))
+
+    if target == "png":
+        return png_bytes
+
+    if target in ("jpg", "jpeg"):
+        buf = BytesIO(png_bytes)
+        img = Image.open(buf).convert("RGB")
+        out = BytesIO()
+        img.save(out, format="JPEG", quality=90)
+        return out.getvalue()
+
+    raise ValueError(f"Unsupported image format: {fmt}. Supported: svg, png, jpeg")
 
 
 def inject_svg_animations(svg_string: str) -> str:
@@ -969,6 +979,35 @@ async def get_actions(
     if animate:
         svg_content = inject_svg_animations(svg_content)
     return card_response(svg_content, format, request)
+
+
+@app.get("/api/commit-analysis")
+async def get_commit_analysis(
+    request: Request,
+    username: str,
+    theme: str = "Default",
+    bg_color: Optional[str] = None,
+    title_color: Optional[str] = None,
+    text_color: Optional[str] = None,
+    border_color: Optional[str] = None
+):
+    """Get commit-message analysis card as SVG."""
+    username = validate_username(username)
+    theme = validate_theme(theme)
+
+    token = get_token_from_header(request)
+    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+
+    analysis_data = github_api.get_commit_history(username, token)
+    analysis_data["username"] = username
+
+    svg_content = generate_cached_svg(
+        commit_analysis_card.draw_commit_analysis_card,
+        analysis_data,
+        theme,
+        custom_colors=custom_colors,
+    )
+    return svg_response(svg_content, request)
 
 # Cache management endpoints
 
