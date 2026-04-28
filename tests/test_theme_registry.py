@@ -32,6 +32,15 @@ def test_midnight_theme_has_required_schema():
     assert midnight_theme["font_family"].strip() != ""
 
 
+def test_forest_theme_is_registered_with_tags():
+    themes = get_all_themes()
+    assert "Forest" in themes
+
+    forest_theme = themes["Forest"]
+    tags = forest_theme.get("tags", [])
+    assert "forest" in [tag.lower() for tag in tags]
+
+
 def test_new_aesthetic_calm_minimal_themes_have_required_schema():
     themes = get_all_themes()
     new_theme_names = [
