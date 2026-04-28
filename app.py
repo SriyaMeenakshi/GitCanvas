@@ -138,7 +138,10 @@ with st.sidebar:
     custom_theme_names = list(CUSTOM_THEMES.keys())
     
     # Combine with custom themes at the end
-    theme_options = predefined_themes + custom_theme_names
+    theme_options = sorted(
+        predefined_themes + custom_theme_names,
+        key=lambda name: name.replace("_", " ").lower(),
+    )
     
     # ── Custom Font Override (Issue #174) ────────────────────────────────────
     st.markdown("**Font Override**")
@@ -171,10 +174,22 @@ with st.sidebar:
     # Filter buttons (pills)
     selected_tags = st.pills("Filter by tag", options=all_tags, selection_mode="multi", key="theme_tags")
 
+    if st.button("Reset Theme Filters", key="reset_theme_filters", use_container_width=True):
+        st.session_state["theme_search"] = ""
+        st.session_state["theme_tags"] = []
+        st.rerun()
+
     # Apply filters to theme_options
     def matches_filter(name, props):
         theme_tags = props.get("tags", [])
-        search_match = not theme_search or theme_search.lower() in name.lower() or any(theme_search.lower() in t.lower() for t in theme_tags)
+        search_term = (theme_search or "").strip().lower()
+        normalized_name = name.replace("_", " ").lower()
+        search_match = (
+            not search_term
+            or search_term in normalized_name
+            or search_term in name.lower()
+            or any(search_term in t.lower() for t in theme_tags)
+        )
         
         if not selected_tags:
             tag_match = True
@@ -202,7 +217,13 @@ with st.sidebar:
     except ValueError:
         default_idx = 0
 
-    selected_theme = st.selectbox("Select Theme", filtered_theme_options, index=default_idx, key="current_theme_selection")
+    selected_theme = st.selectbox(
+        "Select Theme",
+        filtered_theme_options,
+        index=default_idx,
+        key="current_theme_selection",
+        format_func=lambda name: name.replace("_", " "),
+    )
     
     # Customization Expander
     # Ensure custom_colors exists even if the expander isn't opened
@@ -212,10 +233,13 @@ with st.sidebar:
         default_theme = all_themes.get(selected_theme, all_themes["Default"]).copy() # Copy to avoid mutating global
         
         # Helper to get color safely
-        def get_col(key): return default_theme.get(key, "#000000")
+        def get_col(key):
+            val = default_theme.get(key, "000000")
+            return f"#{val}" if not str(val).startswith("#") else val
         
         # Use theme-specific keys so each theme maintains its own customization
-        custom_bg = st.color_picker("Background", value=get_col("bg_color"), key=f"customize_bg_{selected_theme}")
+        def hex_fix(v): return f"#{v}" if not v.startswith("#") else v
+        custom_bg = st.color_picker("Background", value=hex_fix(get_col("bg_color")), key=f"customize_bg_{selected_theme}")
         
         # Validate HEX color format
         if not HEX_COLOR_REGEX.match(custom_bg):
