@@ -647,7 +647,7 @@ with tab1:
                 
                 <!-- Header Bar -->
                 <div style="color: {theme_color}; font-family: 'Courier New', monospace; font-size: 10px; font-weight: bold; letter-spacing: 1px; padding: 12px 15px 5px 15px; opacity: 0.8; display: flex; justify-content: space-between; border-bottom: 1px dashed {current_theme_opts.get('border_color', '#30363d')}44;">
-                    <span>SYSTEM_ACTIVITY_MONITOR // {username.upper()}</span>
+                    <span>SYSTEM_ACTIVITY_MONITOR // {data.get('username', username).upper()}</span>
                     <span>STATUS: LIVE_FEED</span>
                 </div>
                 
@@ -666,7 +666,8 @@ with tab1:
         for k, v in custom_colors.items():
             _spark_params.append(f"{k}={v.replace('#', '')}")
         _spark_qs = ("?" + "&".join(_spark_params)) if _spark_params else ""
-        _spark_url = f"https://gitcanvas-api.vercel.app/api/sparkline{_spark_qs}&username={username}"
+        _spark_sep = "&" if _spark_qs else "?"
+        _spark_url = f"https://gitcanvas-api.vercel.app/api/sparkline{_spark_qs}{_spark_sep}username={data.get('username', username)}"
 
         if output_format == "HTML":
             _spark_code = f'<img src="{_spark_url}" alt="30-Day Activity Sparkline"/>'
@@ -1176,5 +1177,40 @@ with tab14:
                 f'"{example_url}"'
             )
             show_code_area(curl_example, label="Curl Example")
+
+            st.divider()
+            st.subheader("🤖 Automation")
+            st.caption("Use GitHub Actions to automatically update this card in your README every day.")
+            
+            if st.button("Generate Workflow YAML"):
+                workflow_yaml = f"""name: Update GitCanvas Actions Stats
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every day at midnight
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Fetch GitCanvas SVG
+        run: |
+          curl -H "Authorization: Bearer ${{{{ secrets.GITCANVAS_TOKEN }}}}" \\
+          "https://gitcanvas-api.vercel.app/api/actions?username={username}&theme={selected_theme}" \\
+          -o github-actions-stats.svg
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add github-actions-stats.svg
+          git commit -m "Update GitHub Actions stats [skip ci]" || echo "No changes to commit"
+          git push
+"""
+                st.code(workflow_yaml, language="yaml")
+                st.info("💡 **Setup Instructions:**\n1. Create `.github/workflows/gitcanvas.yml` in your repo.\n2. Paste the code above.\n3. Add a secret named `GITCANVAS_TOKEN` in your repo settings with a Classic Personal Access Token (repo scope).")
     else:
         st.warning("No GitHub Actions data could be loaded for this account.")
