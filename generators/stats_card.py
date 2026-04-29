@@ -195,6 +195,8 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
                         stroke="#00ffff", stroke_width=2, fill="none", opacity=0.5))
         dwg.add(dwg.path(d=f"M {width-10} 10 L {width-10} {10+bracket_size} M {width-10} 10 L {width-10-bracket_size} 10", 
                         stroke="#00ffff", stroke_width=2, fill="none", opacity=0.5))
+
+    
     elif theme_name == "Glass":
         # Neon Liquid Glassmorphism Theme (Enhanced)
         

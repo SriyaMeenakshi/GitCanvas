@@ -10,6 +10,19 @@ THEMES = {
         "text_font_size": 14,
         "tags": ["dark", "minimal", "clean", "popular"]
     },
+    "Arc Reactor": {
+    "bg_color": "#020617",          # deep space
+    "border_color": "#00eaff",      # cyan glow
+    "title_color": "#4cc9f0",       # soft blue
+    "text_color": "#e0f7ff",        # readable light
+    "icon_color": "#c0c0c0",        # 👈 silver 
+
+    "font_family": "'Segoe UI', sans-serif",
+    "title_font_size": 20,
+    "text_font_size": 14,
+
+    "tags": ["dark", "energy", "glow"]
+},
     "Music": {
         "bg_color": "#0d0d0d",
         "border_color": "#9d00ff",
