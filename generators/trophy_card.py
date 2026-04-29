@@ -11,7 +11,9 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None, animations_
     height = 240  # Increased for breathing room and to prevent bottom overlap
     
     # Calculate total forks from all repositories
-    total_forks = sum(repo.get("forks", 0) for repo in data.get("top_repos", []))
+    total_forks = data.get("total_forks")
+    if total_forks is None:
+        total_forks = sum(repo.get("forks", 0) for repo in data.get("top_repos", []))
     
     # Calculate years of contribution
     created_at = data.get("created_at", "")
@@ -94,6 +96,46 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None, animations_
     # Repository Quality Tier Badge
     dwg.add(dwg.text(f"{repo_tier} Tier", insert=(60, 182), fill=tier_color, font_size=15, 
                      font_family=font_family, text_anchor="middle", font_weight="bold"))
+
+    # Progress Bar to Next Tier
+    bar_width = 100
+    bar_height = 6
+    bar_x = 60 - (bar_width / 2)
+    bar_y = 195
+    
+    # Progress Calculation
+    if repo_tier == "Newcomer":
+        next_tier_name = "Pro"
+        progress_val = min(100, (total_stars / 100) * 100)
+    elif repo_tier == "Pro":
+        next_tier_name = "Legend"
+        progress_val = min(100, ((total_stars - 100) / 900) * 100)
+    else:
+        next_tier_name = "Max"
+        progress_val = 100
+        
+    # Progress Bar Background
+    dwg.add(dwg.rect(insert=(bar_x, bar_y), size=(bar_width, bar_height), rx=3, ry=3, 
+                     fill=text_color, opacity=0.15))
+                     
+    # Progress Bar Foreground
+    fill_width = (progress_val / 100) * bar_width
+    progress_bar = dwg.rect(insert=(bar_x, bar_y), size=(fill_width, bar_height), rx=3, ry=3, fill=tier_color)
+    
+    if animations_enabled:
+        progress_bar["class"] = "anim-progress-fill"
+        progress_bar.update({"style": f"--target-width: {fill_width}px;"})
+        
+    dwg.add(progress_bar)
+    
+    # Progress Label
+    if next_tier_name != "Max":
+        label_text = f"{int(progress_val)}% to {next_tier_name} Tier"
+    else:
+        label_text = "Master Level Achieved"
+        
+    dwg.add(dwg.text(label_text, insert=(60, 212), fill=text_color, font_size=10, 
+                     font_family=font_family, text_anchor="middle", opacity=0.7))
 
     # Dashboard Stats Grid with simple valid SVG paths
     stats = [

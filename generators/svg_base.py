@@ -135,6 +135,10 @@ CSS_ANIMATIONS = """
     .anim-bubble {
         animation: bubbleFloat 3s ease-in-out infinite;
     }
+    
+    .anim-progress-fill {
+        animation: progressFill 1s ease-out forwards;
+    }
 """
 
 
