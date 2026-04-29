@@ -17,7 +17,8 @@ from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
 from generators.visual_elements import (
     emoji_element,
     gif_element,
-    sticker_element
+    sticker_element,
+    create_composite_canvas
 )
 
 
@@ -62,6 +63,12 @@ st.markdown("""
 
 st.title("GitCanvas: Profile Architect 🛠️")
 st.markdown("### Design your GitHub Stats. Copy the Code. Done.")
+
+# Initialize session state for canvas
+if "canvas" not in st.session_state:
+    st.session_state["canvas"] = []
+if "canvas_elements_metadata" not in st.session_state:
+    st.session_state["canvas_elements_metadata"] = []
 
 
 
@@ -724,25 +731,182 @@ with tab10:
     st.subheader("✨ Visual Elements")
     st.markdown("Add emojis, GIFs, or stickers to your canvas")
 
-    element_type = st.selectbox(
-        "Choose element type",
-        ["Emoji", "GIF", "Sticker"]
-    )
-
-    value = st.text_input(
-        "Enter value",
-        placeholder="🔥 or https://gif-url"
-    )
-
-    if st.button("Add to Canvas"):
-        if element_type == "Emoji":
-            svg = emoji_element(value)
-        elif element_type == "GIF":
-            svg = gif_element(value)
+    # --- Canvas Input Section ---
+    col_input1, col_input2, col_input3 = st.columns([2, 2, 1.5])
+    
+    with col_input1:
+        element_type = st.selectbox(
+            "Choose element type",
+            ["Emoji", "GIF", "Sticker"]
+        )
+    
+    with col_input2:
+        value = st.text_input(
+            "Enter value",
+            placeholder="🔥 or https://gif-url"
+        )
+    
+    with col_input3:
+        add_button = st.button("Add to Canvas", use_container_width=True)
+    
+    # Add element to canvas
+    if add_button:
+        if value:
+            if element_type == "Emoji":
+                svg = emoji_element(value)
+            elif element_type == "GIF":
+                svg = gif_element(value)
+            else:
+                svg = sticker_element(value)
+            
+            st.session_state["canvas"].append(svg)
+            st.session_state["canvas_elements_metadata"].append({
+                "type": element_type,
+                "value": value
+            })
+            st.success(f"✅ {element_type} added to canvas!")
         else:
-            svg = sticker_element(value)
+            st.error("❌ Please enter a value")
 
-        st.session_state["canvas"].append(svg)
+    st.markdown("---")
+
+    # --- Canvas Display & Export Section ---
+    if st.session_state["canvas"]:
+        st.subheader("Canvas Preview")
+        
+        # Generate composite canvas
+        canvas_svg = create_composite_canvas(
+            st.session_state["canvas"],
+            bg_color=current_theme_opts.get("bg_color", "#0d1117"),
+            padding=20
+        )
+        
+        # Display canvas
+        col_display, col_actions = st.columns([2, 1])
+        
+        with col_display:
+            b64 = base64.b64encode(canvas_svg.encode('utf-8')).decode("utf-8")
+            st.markdown(
+                f'<img src="data:image/svg+xml;base64,{b64}" style="max-width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-radius: 10px;"/>',
+                unsafe_allow_html=True
+            )
+        
+        with col_actions:
+            st.markdown("**Canvas Actions**")
+            
+            # SVG Download
+            st.download_button(
+                label="⬇️ Download SVG",
+                data=canvas_svg.encode("utf-8"),
+                file_name=f"canvas_{username}.svg",
+                mime="image/svg+xml",
+                use_container_width=True
+            )
+            
+            # PNG & JPEG Download
+            svg_b64 = base64.b64encode(canvas_svg.encode("utf-8")).decode("utf-8")
+            filename_prefix_safe = json.dumps(f"canvas_{username}")
+            
+            st.components.v1.html(f"""
+            <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+                <button onclick="downloadCanvasAs('png')" style="
+                    width:100%; padding:8px; font-size:12px; cursor:pointer;
+                    background:#1a1a2e; color:white; border:1px solid #444;
+                    border-radius:6px; font-weight: bold;">
+                    ⬇️ PNG
+                </button>
+                <button onclick="downloadCanvasAs('jpeg')" style="
+                    width:100%; padding:8px; font-size:12px; cursor:pointer;
+                    background:#1a1a2e; color:white; border:1px solid #444;
+                    border-radius:6px; font-weight: bold;">
+                    ⬇️ JPEG
+                </button>
+            </div>
+
+            <script>
+            function downloadCanvasAs(format) {{
+                const svgText = atob('{svg_b64}');
+                const parser = new DOMParser();
+                const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+                const svgEl = svgDoc.documentElement;
+
+                const vb = svgEl.getAttribute('viewBox');
+                let w = 600, h = 400;
+                if (vb) {{
+                    const parts = vb.split(/[\\s,]+/);
+                    w = parseFloat(parts[2]) || 600;
+                    h = parseFloat(parts[3]) || 400;
+                }}
+
+                const blob = new Blob([svgText], {{type: 'image/svg+xml'}});
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = function() {{
+                    const SCALE = 2;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w * SCALE;
+                    canvas.height = h * SCALE;
+                    const ctx = canvas.getContext('2d');
+
+                    if (format === 'jpeg') {{
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    }}
+
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    canvas.toBlob(function(blob) {{
+                        const link = document.createElement('a');
+                        link.download = {filename_prefix_safe} + (format === 'jpeg' ? '.jpeg' : '.png');
+                        link.href = URL.createObjectURL(blob);
+                        link.click();
+                        URL.revokeObjectURL(url);
+                    }}, 'image/' + format, 1.0);
+                }};
+                img.src = url;
+            }}
+            </script>
+            """, height=120)
+        
+        st.markdown("---")
+        st.subheader("Embed Code")
+        
+        # Generate embed URLs/code
+        embed_col1, embed_col2 = st.columns(2)
+        
+        with embed_col1:
+            st.markdown("**Markdown Code**")
+            embed_code = f"![Canvas - {username}](https://your-image-hosting.com/canvas_{username}.svg)"
+            st.text_area("Copy this code:", value=embed_code, height=60, label_visibility="collapsed", key="canvas_markdown_code")
+        
+        with embed_col2:
+            st.markdown("**HTML Code**")
+            html_code = f'<img src="https://your-image-hosting.com/canvas_{username}.svg" alt="Canvas - {username}"/>'
+            st.text_area("Copy this code:", value=html_code, height=60, label_visibility="collapsed", key="canvas_html_code")
+        
+        st.info("💡 **Note:** Download your canvas SVG above and host it on GitHub, Imgur, or any image hosting service, then use the embed code above.")
+        
+        st.markdown("---")
+        st.subheader("Canvas Contents")
+        
+        # Show list of elements
+        for idx, metadata in enumerate(st.session_state["canvas_elements_metadata"]):
+            col_item, col_remove = st.columns([4, 1])
+            with col_item:
+                st.caption(f"**{metadata['type']}** • {metadata['value']}")
+            with col_remove:
+                if st.button("🗑️", key=f"remove_{idx}", help="Remove this element"):
+                    st.session_state["canvas"].pop(idx)
+                    st.session_state["canvas_elements_metadata"].pop(idx)
+                    st.rerun()
+        
+        # Clear canvas button
+        if st.button("🧹 Clear All Canvas", use_container_width=True):
+            st.session_state["canvas"] = []
+            st.session_state["canvas_elements_metadata"] = []
+            st.rerun()
+    else:
+        st.info("👆 Add elements to your canvas to get started. You can mix emojis, GIFs, and stickers!")
 
 # TAB 11: Trophy Card
 with tab11:
