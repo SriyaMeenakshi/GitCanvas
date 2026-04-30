@@ -3,7 +3,6 @@ import streamlit.components.v1 as components
 import base64
 import os
 import re
-import json
 import requests
 
 # HEX color regex validation pattern
@@ -11,6 +10,7 @@ HEX_COLOR_REGEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
 from dotenv import load_dotenv
 from config.settings import get_settings
 from roast_widget_streamlit import render_roast_widget
+from compliment_widget_streamlit import render_compliment_widget
 from ai.description_generator import generate_github_description
 from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card, achievement_card
 from utils import github_api
@@ -138,7 +138,10 @@ with st.sidebar:
     custom_theme_names = list(CUSTOM_THEMES.keys())
     
     # Combine with custom themes at the end
-    theme_options = predefined_themes + custom_theme_names
+    theme_options = sorted(
+        predefined_themes + custom_theme_names,
+        key=lambda name: name.replace("_", " ").lower(),
+    )
     
     # ── Custom Font Override (Issue #174) ────────────────────────────────────
     st.markdown("**Font Override**")
@@ -171,10 +174,22 @@ with st.sidebar:
     # Filter buttons (pills)
     selected_tags = st.pills("Filter by tag", options=all_tags, selection_mode="multi", key="theme_tags")
 
+    if st.button("Reset Theme Filters", key="reset_theme_filters", use_container_width=True):
+        st.session_state["theme_search"] = ""
+        st.session_state["theme_tags"] = []
+        st.rerun()
+
     # Apply filters to theme_options
     def matches_filter(name, props):
         theme_tags = props.get("tags", [])
-        search_match = not theme_search or theme_search.lower() in name.lower() or any(theme_search.lower() in t.lower() for t in theme_tags)
+        search_term = (theme_search or "").strip().lower()
+        normalized_name = name.replace("_", " ").lower()
+        search_match = (
+            not search_term
+            or search_term in normalized_name
+            or search_term in name.lower()
+            or any(search_term in t.lower() for t in theme_tags)
+        )
         
         if not selected_tags:
             tag_match = True
@@ -202,7 +217,13 @@ with st.sidebar:
     except ValueError:
         default_idx = 0
 
-    selected_theme = st.selectbox("Select Theme", filtered_theme_options, index=default_idx, key="current_theme_selection")
+    selected_theme = st.selectbox(
+        "Select Theme",
+        filtered_theme_options,
+        index=default_idx,
+        key="current_theme_selection",
+        format_func=lambda name: name.replace("_", " "),
+    )
     
     # Customization Expander
     # Ensure custom_colors exists even if the expander isn't opened
@@ -212,10 +233,13 @@ with st.sidebar:
         default_theme = all_themes.get(selected_theme, all_themes["Default"]).copy() # Copy to avoid mutating global
         
         # Helper to get color safely
-        def get_col(key): return default_theme.get(key, "#000000")
+        def get_col(key):
+            val = default_theme.get(key, "000000")
+            return f"#{val}" if not str(val).startswith("#") else val
         
         # Use theme-specific keys so each theme maintains its own customization
-        custom_bg = st.color_picker("Background", value=get_col("bg_color"), key=f"customize_bg_{selected_theme}")
+        def hex_fix(v): return f"#{v}" if not v.startswith("#") else v
+        custom_bg = st.color_picker("Background", value=hex_fix(get_col("bg_color")), key=f"customize_bg_{selected_theme}")
         
         # Validate HEX color format
         if not HEX_COLOR_REGEX.match(custom_bg):
@@ -421,6 +445,8 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13
     "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges",
     "🔥 AI Roast & Summary", "Recent Activity", "✨ Visual Elements",
     "🏆 Trophy", "🏆 Achievement Room", "🎨 Theme Gallery", "📅 Calendar Heatmap",
+    "🔥 AI Roast & Summary", "✨ AI Compliment", "Recent Activity", "✨ Visual Elements",
+    "🏆 Trophy", "🎨 Theme Gallery", "📅 Calendar Heatmap",
     "⚙️ GitHub Actions"
 ])
 
@@ -430,7 +456,7 @@ def show_code_area(code_content, label="Markdown Code"):
 
 
 def render_embedded_html(html_content: str, *, height: int) -> None:
-    """Render inline HTML using Streamlit's components API."""
+    """Render embedded HTML using Streamlit's components API."""
     components.html(html_content, height=height, scrolling=False)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
@@ -451,7 +477,7 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
 
         # --- PNG & JPEG Download via browser Canvas (no system dependencies) ---
         svg_b64 = base64.b64encode(svg_bytes.encode("utf-8")).decode("utf-8")
-        filename_prefix_safe = json.dumps(f"{endpoint}_{username}")
+        filename_prefix_safe = f"{endpoint}_{username}"
 
         render_embedded_html(f"""
         <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
@@ -495,18 +521,16 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
                 canvas.height = h * SCALE;
                 const ctx = canvas.getContext('2d');
 
-                // Optional: fill white background for JPEG
                 if (format === 'jpeg') {{
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }}
 
-                // Draw image preserving aspect ratio
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                 canvas.toBlob(function(blob) {{
                     const link = document.createElement('a');
-                    link.download = {filename_prefix_safe} + (format === 'jpeg' ? '.jpeg' : '.png');
+                    link.download = '{filename_prefix_safe}' + (format === 'jpeg' ? '.jpeg' : '.png');
                     link.href = URL.createObjectURL(blob);
                     link.click();
                     URL.revokeObjectURL(url);
@@ -562,8 +586,9 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
         query_str = "&".join(params)
         if query_str:
             query_str = "?" + query_str
-
-        url = f"https://gitcanvas-api.vercel.app/api/{endpoint}{query_str}&username={username}"
+            url = f"https://gitcanvas-api.vercel.app/api/{endpoint}{query_str}&username={username}"
+        else:
+            url = f"https://gitcanvas-api.vercel.app/api/{endpoint}?username={username}"
         
         # Generate code based on output format
         if output_format == "HTML":
@@ -963,7 +988,24 @@ with tab8:
     else:
         st.info("Click **Generate AI Description** to create a summary for the current theme.")
 
+# AI COMPLIMENT TAB
 with tab9:
+    st.subheader("✨ AI Profile Compliment")
+
+    if not _settings.has_any_llm_key:
+        st.warning(
+            "No **OPENAI_API_KEY** or **GEMINI_API_KEY** in the environment: the AI Compliment tab uses "
+            "built-in fallback lines only until you add a provider key."
+        )
+
+    st.markdown("Let AI celebrate and compliment your GitHub profile!")
+    
+    if username:
+        render_compliment_widget(username, profile_data=data)
+    else:
+        st.warning("Please enter a GitHub username in the sidebar.")
+
+with tab10:
     st.subheader("Recent Activity")
     st.markdown("Shows your last 3 PR or Issue events from GitHub.")
 
@@ -1011,7 +1053,7 @@ with tab9:
         code_label = "HTML Code" if output_format == "HTML" else "Markdown Code"
         show_code_area(code, label=code_label)
 
-with tab10:
+with tab11:
     st.subheader("✨ Visual Elements")
     st.markdown("Add emojis, GIFs, or stickers to your canvas")
 

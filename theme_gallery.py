@@ -17,7 +17,8 @@ def _generate_mini_svg(theme_name: str, theme: dict) -> str:
     font      = theme.get("font_family",     "Segoe UI, Ubuntu, sans-serif")
     font_size = theme.get("title_font_size", 14)
 
-    display_name = theme_name if len(theme_name) <= 14 else theme_name[:13] + "…"
+    pretty_name = theme_name.replace("_", " ")
+    display_name = pretty_name if len(pretty_name) <= 14 else pretty_name[:13] + "…"
     accent = title_col
 
     # Simulate a mini contribution grid (5x4 cells)

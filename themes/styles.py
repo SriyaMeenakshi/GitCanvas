@@ -102,10 +102,20 @@ THEMES = {
 }
 import json
 import os
+from pathlib import Path
 from themes.aurora_gradient import AURORA_GRADIENT
 
 
-themes_dir = os.path.join(os.path.dirname(__file__), 'json')
+themes_dir = Path(__file__).parent / "json"
+themes_dir.mkdir(exist_ok=True)
+
+def normalize_theme_colors(theme_data):
+    """Ensure hex color values include a leading #."""
+    for key, value in theme_data.items():
+        if key.endswith("_color") and isinstance(value, str) and value and not value.startswith("#"):
+            theme_data[key] = f"#{value}"
+    return theme_data
+
 
 def load_predefined_themes():
     """Load predefined themes from JSON files"""
@@ -114,7 +124,8 @@ def load_predefined_themes():
             if filename.endswith('.json') and not filename.startswith('custom_'):
                 theme_name = filename[:-5].capitalize()  # Remove .json and capitalize
                 with open(os.path.join(themes_dir, filename), 'r') as f:
-                    THEMES[theme_name] = json.load(f)
+                    theme_data = json.load(f)
+                THEMES[theme_name] = normalize_theme_colors(theme_data)
 
 def load_custom_themes():
     """Load custom themes from custom_*.json files"""
@@ -125,7 +136,8 @@ def load_custom_themes():
                 # Extract theme name from custom_{name}.json
                 theme_name = filename[7:-5].capitalize()  # Remove 'custom_' and '.json'
                 with open(os.path.join(themes_dir, filename), 'r') as f:
-                    custom_themes[theme_name] = json.load(f)
+                    theme_data = json.load(f)
+                custom_themes[theme_name] = normalize_theme_colors(theme_data)
     return custom_themes
 
 def save_custom_theme(theme_name, theme_data):
@@ -133,9 +145,9 @@ def save_custom_theme(theme_name, theme_data):
     # Sanitize theme name for filename
     safe_name = theme_name.lower().replace(' ', '_').replace('-', '_')
     filename = f"custom_{safe_name}.json"
-    filepath = os.path.join(themes_dir, filename)
+    filepath = themes_dir / filename
     
-    with open(filepath, 'w') as f:
+    with filepath.open('w') as f:
         json.dump(theme_data, f, indent=4)
     
     return filename
