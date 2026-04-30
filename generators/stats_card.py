@@ -3,6 +3,7 @@ import random
 import svgwrite
 from themes.styles import THEMES
 from .svg_base import create_svg_base, CSS_ANIMATIONS, draw_card_background, draw_divider_line, draw_section_title
+from utils.achievements import calculate_achievements
 
 # JavaScript for number counting animation
 COUNTING_SCRIPT = """
@@ -69,7 +70,7 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
     # Calculate height dynamically based on visible items
     base_height = 50
     item_height = 25
-    visible_items = sum(1 for k, v in show_options.items() if v)
+    visible_items = sum(1 for k, v in show_options.items() if v) + 1 # +1 for achievements
     
     is_glass = False
     if isinstance(theme_name, dict):
@@ -293,6 +294,13 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
                 
                 current_y += item_height
         
+        # Glass Achievements Row
+        achievements = calculate_achievements(data)
+        unlocked_count = len([a for a in achievements if a["unlocked"]])
+        dwg.add(dwg.line(start=(margin + 20, current_y + 8), end=(width - margin - 20, current_y + 8), stroke="white", opacity=0.04))
+        dwg.add(dwg.text("Achievements:", insert=(margin + 25, current_y), fill=text_col, font_size=11, font_family="'Inter', sans-serif", opacity=0.8))
+        dwg.add(dwg.text(f"{unlocked_count}/{len(achievements)}", insert=(width - margin - 25, current_y), fill="white", font_size=11, font_family="'Inter', sans-serif", text_anchor="end", font_weight="bold"))
+
         return dwg.tostring()
     
         # ── Compact Layout (Issue #164) ──────────────────────────────────────
@@ -361,6 +369,11 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
                 fill=text_col, font_size=13,
                 font_family=font, font_weight="bold"
             ))
+
+        # Compact Achievements Row (Bottom)
+        achievements = calculate_achievements(data)
+        unlocked_count = len([a for a in achievements if a["unlocked"]])
+        c_dwg.add(c_dwg.text(f"🏆 {unlocked_count}/{len(achievements)}", insert=(compact_width - 12, 22), fill=title_col, font_size=10, font_family=font, text_anchor="end", font_weight="bold"))
 
         return c_dwg.tostring()
     # ── End Compact Layout ────────────────────────────────────────────────
@@ -441,4 +454,15 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
                              
             current_y += item_height
             
+    # Achievements Row
+    achievements = calculate_achievements(data)
+    unlocked_count = len([a for a in achievements if a["unlocked"]])
+    
+    # Icon
+    dwg.add(dwg.circle(center=(30, current_y - 5), r=4, fill=theme["icon_color"]))
+    # Label
+    dwg.add(dwg.text("Achievements:", insert=(45, current_y), fill=text_color, font_size=font_size, font_family=font_family))
+    # Value
+    dwg.add(dwg.text(f"{unlocked_count}/{len(achievements)}", insert=(width - 40, current_y), fill=text_color, font_size=font_size, font_family=font_family, text_anchor="end", font_weight="bold"))
+    
     return dwg.tostring()

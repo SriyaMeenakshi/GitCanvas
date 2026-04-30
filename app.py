@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from config.settings import get_settings
 from roast_widget_streamlit import render_roast_widget
 from ai.description_generator import generate_github_description
-from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card
+from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card, achievement_card
 from utils import github_api
 try:
     from utils.github_utils import get_rate_limit_status as fetch_rate_limit_status
@@ -416,11 +416,11 @@ elif font_override:
     custom_colors = {"font_family": font_override}
 
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
     "Main Stats", "Languages", "Top Repositories", "Contributions",
     "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges",
     "🔥 AI Roast & Summary", "Recent Activity", "✨ Visual Elements",
-    "🏆 Trophy", "🎨 Theme Gallery", "📅 Calendar Heatmap",
+    "🏆 Trophy", "🏆 Achievement Room", "🎨 Theme Gallery", "📅 Calendar Heatmap",
     "⚙️ GitHub Actions"
 ])
 
@@ -1050,14 +1050,22 @@ with tab11:
     svg_bytes = trophy_card.draw_trophy_card(trophy_data, selected_theme, custom_colors, animations_enabled=animations_enabled)
     render_tab(svg_bytes, "trophy", username, selected_theme, custom_colors, code_template="![GitHub Trophy]({url})", output_format=output_format, font_override=font_override)
 
-    # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
+# TAB 12: Achievement Room Card
 with tab12:
+    st.subheader("🏆 Achievement Room")
+    st.markdown("Showcase your GitHub milestones with dynamic achievement badges!")
+    
+    svg_bytes = achievement_card.draw_achievement_card(data, selected_theme, custom_colors, animations_enabled=animations_enabled)
+    render_tab(svg_bytes, "achievements", username, selected_theme, custom_colors, code_template="![Achievement Room]({url})", output_format=output_format, font_override=font_override)
+
+    # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
+with tab13:
     chosen_theme = render_theme_gallery(all_themes, selected_theme)
     if chosen_theme:
         st.session_state["gallery_selected_theme"] = chosen_theme
         st.rerun()
 
-with tab13:
+with tab14:
     st.subheader("📅 Yearly Calendar Heatmap")
     st.caption("A 53-week contribution heatmap with selectable intensity mapping and custom colors.")
 
@@ -1146,7 +1154,7 @@ with tab13:
         },
     )
 
-with tab14:
+with tab15:
     st.subheader("⚙️ GitHub Actions")
     st.caption("Workflow run totals, success rate, and recent runs from GitHub Actions.")
 
