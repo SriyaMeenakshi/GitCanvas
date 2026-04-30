@@ -174,8 +174,9 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
     
     dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {width} {height}")
     
-    # Note: CSS animations disabled due to svgwrite validation constraints
-    
+    # Inject CSS animations
+    if animations_enabled:
+        dwg.defs.add(dwg.style(CSS_ANIMATIONS))
     # Background with optional border pulse animation
     bg_params = {
         "insert": (0, 0), 
@@ -187,11 +188,6 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
         "stroke_width": 2
     }
     
-    if animations_enabled:
-        dwg.add(dwg.rect(**bg_params))
-    else:
-        dwg.add(dwg.rect(**bg_params))
-    
     # Title with animation
     title_params = {
         "insert": (20, 30),
@@ -202,9 +198,11 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
     }
     
     if animations_enabled:
-        dwg.add(dwg.text(title_text, **title_params))
-    else:
-        dwg.add(dwg.text(title_text, **title_params))
+        bg_params["class_"] = "anim-fade-in"
+        title_params["class_"] = "anim-slide-up"
+        
+    dwg.add(dwg.rect(**bg_params))
+    dwg.add(dwg.text(title_text, **title_params))
     
     return dwg, theme
 
