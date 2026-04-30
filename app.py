@@ -13,6 +13,7 @@ from roast_widget_streamlit import render_roast_widget
 from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card, commit_analysis_card, gist_card
 from utils import github_api
 from utils.cache import clear_cache as clear_ttl_cache
+from utils.theme_state import reset_theme_filter_state
 from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
 from generators.visual_elements import (
     emoji_element,
@@ -94,9 +95,14 @@ with st.sidebar:
     # Customization Expander
     # Ensure custom_colors exists even if the expander isn't opened
     custom_colors = {}
+    theme_defaults = all_themes.get(selected_theme, all_themes["Default"]).copy()
+
+    def _reset_theme_filters():
+        reset_theme_filter_state(st.session_state, selected_theme, theme_defaults)
+
     with st.expander("Customize Colors", expanded=False):
         st.caption("Override theme defaults")
-        default_theme = all_themes.get(selected_theme, all_themes["Default"]).copy() # Copy to avoid mutating global
+        default_theme = theme_defaults  # Copy already taken above to avoid mutating global
         
         # Helper to get color safely
         def get_col(key): return default_theme.get(key, "#000000")
@@ -136,6 +142,13 @@ with st.sidebar:
         if custom_title != get_col("title_color"): custom_colors["title_color"] = custom_title
         if custom_text != get_col("text_color"): custom_colors["text_color"] = custom_text
         if custom_border != get_col("border_color"): custom_colors["border_color"] = custom_border
+
+        st.button(
+            "Reset Theme Filters",
+            use_container_width=True,
+            on_click=_reset_theme_filters,
+            help="Restore this theme's color controls to their default values",
+        )
 
     # Custom Theme Creator Section
     with st.expander("🎨 Custom Theme Creator", expanded=False):
