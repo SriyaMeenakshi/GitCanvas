@@ -10,6 +10,17 @@ THEMES = {
         "text_font_size": 14,
         "tags": ["dark", "minimal", "clean", "popular"]
     },
+   "Spider-Man": {
+    "bg_color": "#050505",
+    "border_color": "#ff0000",
+    "title_color": "#005aff",
+    "text_color": "#ede7e7",
+    "icon_color": "#b50505",
+    "font_family": "'Courier New', sans-serif",
+    "title_font_size": 24,
+    "text_font_size": 14,
+    "tags": ["balanced", "classic", "vibrant", "readable"]
+},
     "Music": {
         "bg_color": "#0d0d0d",
         "border_color": "#9d00ff",
