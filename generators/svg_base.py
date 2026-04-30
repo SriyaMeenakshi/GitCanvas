@@ -172,7 +172,7 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
     if custom_colors:
         theme.update(custom_colors)
     
-    dwg = svgwrite.Drawing(size=(f"{width}px", f"{height}px"))
+    dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {width} {height}")
     
     # Note: CSS animations disabled due to svgwrite validation constraints
     

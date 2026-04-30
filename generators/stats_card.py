@@ -300,8 +300,7 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
         compact_height = 120
         username = data.get("username", "user")
 
-        c_dwg = svgwrite.Drawing(size=(compact_width, compact_height))
-        c_dwg.viewbox(0, 0, compact_width, compact_height)
+        c_dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {compact_width} {compact_height}")
 
         bg_col     = theme.get("bg_color",     "#0d1117")
         border_col = theme.get("border_color", "#30363d")
