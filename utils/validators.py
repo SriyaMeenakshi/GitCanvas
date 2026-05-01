@@ -217,12 +217,8 @@ def validate_date(date_str: Optional[str]) -> Optional[str]:
 
 # Allowed safe web-safe + Google Fonts 
 ALLOWED_FONTS = {
-    "inter", "roboto", "poppins", "lato", "montserrat", "opensans",
-    "raleway", "nunito", "ubuntu", "dmsans", "worksans", "rubik",
-    "mulish", "sourcesanspro", "merriweather", "playfair", "oswald",
-    "anton", "bebasneue", "orbitron", "cinzel", "josefinsans",
-    "firacode", "jetbrainsmono", "sourcecodepro", "ibmplexmono",
-    "ibmplexsans", "spacemono", "inconsolata",
+    "inter", "rubik", "merriweather", "playfairdisplay", "oswald",
+    "orbitron", "firacode",
     "segoeui", "arial", "verdana", "georgia", "couriernew"
 }
 

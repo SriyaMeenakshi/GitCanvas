@@ -215,18 +215,13 @@ with st.sidebar:
     st.markdown("**Font Override**")
     FONT_OPTIONS = [
         "Theme Default",
-        "Inter", "Roboto", "Poppins", "Lato", "Montserrat",
-        "Ubuntu", "Nunito", "DM Sans", "Work Sans", "Rubik",
-        "Mulish", "Open Sans", "Raleway", "Source Sans 3",
-        "Merriweather", "Playfair Display", "Oswald", "Anton",
-        "Bebas Neue", "Orbitron", "Cinzel", "Josefin Sans",
-        "Fira Code", "JetBrains Mono", "Source Code Pro",
-        "IBM Plex Mono", "IBM Plex Sans", "Space Mono"
+        "Inter", "Rubik", "Merriweather", "Playfair Display",
+        "Oswald", "Orbitron", "Fira Code"
     ]
     selected_font = st.selectbox(
         "Card Font",
         FONT_OPTIONS,
-        help="Override the theme's default font for all generated cards."
+        help="Curated high-contrast font set for visible card changes."
     )
     # None means use theme default — only pass if user picked something
     font_override = None if selected_font == "Theme Default" else selected_font
