@@ -26,6 +26,7 @@ from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
 from utils.theme_storage import get_storage_backend
 from utils.error_card import draw_error_card
 from generators.visual_elements import emoji_element, gif_element, sticker_element
+from generators.svg_base import get_svg_font_style
 try:
     from generators.visual_elements import create_composite_canvas
 except ImportError:
@@ -536,6 +537,17 @@ def render_embedded_html(html_content: str, *, height: int) -> None:
     st.iframe(data_url, height=height)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
+    if font_override:
+        font_style = get_svg_font_style(font_override)
+        if font_style and "<svg" in svg_bytes:
+            svg_open = svg_bytes.find(">")
+            if svg_open != -1:
+                svg_bytes = (
+                    svg_bytes[: svg_open + 1]
+                    + f"<defs><style type=\"text/css\"><![CDATA[{font_style}]]></style></defs>"
+                    + svg_bytes[svg_open + 1 :]
+                )
+
     col1, col2 = st.columns([1.5, 1])
     with col1:
         # Render SVG

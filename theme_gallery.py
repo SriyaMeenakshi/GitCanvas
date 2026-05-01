@@ -2,6 +2,8 @@
 import base64
 import streamlit as st
 
+from generators.svg_base import get_svg_font_style
+
 
 def _generate_mini_svg(theme_name: str, theme: dict, font_override: str | None = None) -> str:
     """
@@ -60,9 +62,14 @@ def _generate_mini_svg(theme_name: str, theme: dict, font_override: str | None =
         <rect x="{bar_x}" y="{by}" width="{w}" height="6" rx="3"
               fill="{color}" opacity="{op}"/>"""
 
-    return f"""<svg xmlns="http://www.w3.org/2000/svg"
+        font_style = get_svg_font_style(font)
+
+        return f"""<svg xmlns="http://www.w3.org/2000/svg"
     width="200" height="140" viewBox="0 0 200 140">
   <defs>
+        <style type="text/css"><![CDATA[
+        {font_style}
+        ]]></style>
     <linearGradient id="hdr_{theme_name.replace(' ','_')}" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%"   stop-color="{accent}" stop-opacity="0.25"/>
       <stop offset="100%" stop-color="{bg}"      stop-opacity="0"/>

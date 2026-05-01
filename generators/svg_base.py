@@ -1,6 +1,40 @@
 import svgwrite
 from themes.styles import THEMES
 
+
+_FONT_FACE_MAP = {
+    "inter": ("Inter", "Inter:wght@400;500;600;700;800", "'Inter', system-ui, sans-serif"),
+    "roboto": ("Roboto", "Roboto:wght@400;500;700", "'Roboto', sans-serif"),
+    "poppins": ("Poppins", "Poppins:wght@400;500;600;700", "'Poppins', sans-serif"),
+    "lato": ("Lato", "Lato:wght@400;700", "'Lato', sans-serif"),
+    "montserrat": ("Montserrat", "Montserrat:wght@400;500;600;700;800", "'Montserrat', sans-serif"),
+    "ubuntu": ("Ubuntu", "Ubuntu:wght@400;500;700", "'Ubuntu', sans-serif"),
+    "nunito": ("Nunito", "Nunito:wght@400;500;600;700;800", "'Nunito', sans-serif"),
+    "merriweather": ("Merriweather", "Merriweather:wght@400;700", "'Merriweather', serif"),
+    "playfair": ("Playfair Display", "Playfair+Display:wght@400;500;600;700;800", "'Playfair Display', serif"),
+    "firacode": ("Fira Code", "Fira+Code:wght@400;500;600;700", "'Fira Code', monospace"),
+    "jetbrainsmono": ("JetBrains Mono", "JetBrains+Mono:wght@400;500;600;700;800", "'JetBrains Mono', monospace"),
+    "spacemono": ("Space Mono", "Space+Mono:wght@400;700", "'Space Mono', monospace"),
+}
+
+
+def get_svg_font_style(font_family):
+    """Return SVG CSS that loads and applies a selected font family."""
+    if not font_family:
+        return ""
+
+    normalized = str(font_family).replace("'", "").replace('"', "").split(",")[0].strip().lower().replace(" ", "")
+    font_info = _FONT_FACE_MAP.get(normalized)
+
+    if font_info:
+        _display_name, query_name, css_stack = font_info
+        return (
+            f"@import url('https://fonts.googleapis.com/css2?family={query_name}&display=swap');\n"
+            f"text, tspan, .svg-font {{ font-family: {css_stack} !important; }}"
+        )
+
+    return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
+
 # CSS Animation Definitions - Reusable across all card generators
 CSS_ANIMATIONS = """
     /* Fade In Animation */
@@ -181,6 +215,10 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
     # Inject CSS animations
     if animations_enabled:
         dwg.defs.add(dwg.style(CSS_ANIMATIONS))
+
+    font_style = get_svg_font_style(theme.get("font_family"))
+    if font_style:
+        dwg.defs.add(dwg.style(font_style))
     # Background with optional border pulse animation
     bg_params = {
         "insert": (0, 0), 
