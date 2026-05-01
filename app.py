@@ -21,10 +21,19 @@ except ImportError:
     def fetch_rate_limit_status(token: str | None = None) -> dict | None:
         return None
 from utils.cache import clear_cache as clear_ttl_cache
+from utils.theme_state import reset_theme_filter_state
 from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
 from utils.theme_storage import get_storage_backend
 from utils.error_card import draw_error_card
 from generators.visual_elements import emoji_element, gif_element, sticker_element
+try:
+    from generators.svg_base import get_svg_font_style as _shared_get_svg_font_style
+except (ImportError, AttributeError):
+    def _shared_get_svg_font_style(font_family):
+        if not font_family:
+            return ""
+        return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
+
 try:
     from generators.visual_elements import create_composite_canvas
 except ImportError:
@@ -206,14 +215,13 @@ with st.sidebar:
     st.markdown("**Font Override**")
     FONT_OPTIONS = [
         "Theme Default",
-        "Inter", "Roboto", "Poppins", "Lato", "Montserrat",
-        "Ubuntu", "Nunito", "Merriweather", "Playfair",
-        "Fira Code", "JetBrains Mono", "Space Mono"
+        "Inter", "Rubik", "Merriweather", "Playfair Display",
+        "Oswald", "Orbitron", "Fira Code"
     ]
     selected_font = st.selectbox(
         "Card Font",
         FONT_OPTIONS,
-        help="Override the theme's default font for all generated cards."
+        help="Curated high-contrast font set for visible card changes."
     )
     # None means use theme default — only pass if user picked something
     font_override = None if selected_font == "Theme Default" else selected_font
@@ -287,9 +295,14 @@ with st.sidebar:
     # Customization Expander
     # Ensure custom_colors exists even if the expander isn't opened
     custom_colors = {}
+    theme_defaults = all_themes.get(selected_theme, all_themes["Default"]).copy()
+
+    def _reset_theme_filters():
+        reset_theme_filter_state(st.session_state, selected_theme, theme_defaults)
+
     with st.expander("Customize Colors", expanded=False):
         st.caption("Override theme defaults")
-        default_theme = all_themes.get(selected_theme, all_themes["Default"]).copy() # Copy to avoid mutating global
+        default_theme = theme_defaults  # Copy already taken above to avoid mutating global
         
         # Helper to get color safely
         def get_col(key):
@@ -332,6 +345,13 @@ with st.sidebar:
         if custom_title != get_col("title_color"): custom_colors["title_color"] = custom_title
         if custom_text != get_col("text_color"): custom_colors["text_color"] = custom_text
         if custom_border != get_col("border_color"): custom_colors["border_color"] = custom_border
+
+        st.button(
+            "Reset Theme Filters",
+            use_container_width=True,
+            on_click=_reset_theme_filters,
+            help="Restore this theme's color controls to their default values",
+        )
 
     # Custom Theme Creator Section
     with st.expander("🎨 Custom Theme Creator", expanded=False):
@@ -492,11 +512,13 @@ current_theme_opts = all_themes.get(selected_theme, all_themes["Default"]).copy(
 if custom_colors:
     current_theme_opts.update(custom_colors)
 
-# Add font override to custom_colors if set
-if font_override and custom_colors:
-    custom_colors["font_family"] = font_override
-elif font_override:
-    custom_colors = {"font_family": font_override}
+# Add font override everywhere it is consumed so all renderers see the same font.
+if font_override:
+    current_theme_opts["font_family"] = font_override
+    if custom_colors:
+        custom_colors = {**custom_colors, "font_family": font_override}
+    else:
+        custom_colors = {"font_family": font_override}
 
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
@@ -521,6 +543,17 @@ def render_embedded_html(html_content: str, *, height: int) -> None:
     st.iframe(data_url, height=height)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
+    if font_override:
+        font_style = _shared_get_svg_font_style(font_override)
+        if font_style and "<svg" in svg_bytes:
+            svg_open = svg_bytes.find(">")
+            if svg_open != -1:
+                svg_bytes = (
+                    svg_bytes[: svg_open + 1]
+                    + f"<defs><style type=\"text/css\"><![CDATA[{font_style}]]></style></defs>"
+                    + svg_bytes[svg_open + 1 :]
+                )
+
     col1, col2 = st.columns([1.5, 1])
     with col1:
         # Render SVG
@@ -733,7 +766,7 @@ with tab1:
                 
                 <!-- Header Bar -->
                 <div style="color: {theme_color}; font-family: 'Courier New', monospace; font-size: 10px; font-weight: bold; letter-spacing: 1px; padding: 12px 15px 5px 15px; opacity: 0.8; display: flex; justify-content: space-between; border-bottom: 1px dashed {current_theme_opts.get('border_color', '#30363d')}44;">
-                    <span>SYSTEM_ACTIVITY_MONITOR // {username.upper()}</span>
+                    <span>SYSTEM_ACTIVITY_MONITOR // {data.get('username', username).upper()}</span>
                     <span>STATUS: LIVE_FEED</span>
                 </div>
                 
@@ -752,7 +785,8 @@ with tab1:
         for k, v in custom_colors.items():
             _spark_params.append(f"{k}={v.replace('#', '')}")
         _spark_qs = ("?" + "&".join(_spark_params)) if _spark_params else ""
-        _spark_url = f"https://gitcanvas-api.vercel.app/api/sparkline{_spark_qs}&username={username}"
+        _spark_sep = "&" if _spark_qs else "?"
+        _spark_url = f"https://gitcanvas-api.vercel.app/api/sparkline{_spark_qs}{_spark_sep}username={data.get('username', username)}"
 
         if output_format == "HTML":
             _spark_code = f'<img src="{_spark_url}" alt="30-Day Activity Sparkline"/>'
@@ -1329,7 +1363,7 @@ with tab12:
 
     # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
 with tab13:
-    chosen_theme = render_theme_gallery(all_themes, selected_theme)
+    chosen_theme = render_theme_gallery(all_themes, selected_theme, font_override=font_override)
     if chosen_theme:
         st.session_state["gallery_selected_theme"] = chosen_theme
         st.rerun()
@@ -1454,5 +1488,40 @@ with tab15:
                 f'"{example_url}"'
             )
             show_code_area(curl_example, label="Curl Example")
+
+            st.divider()
+            st.subheader("🤖 Automation")
+            st.caption("Use GitHub Actions to automatically update this card in your README every day.")
+            
+            if st.button("Generate Workflow YAML"):
+                workflow_yaml = f"""name: Update GitCanvas Actions Stats
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every day at midnight
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Fetch GitCanvas SVG
+        run: |
+          curl -H "Authorization: Bearer ${{{{ secrets.GITCANVAS_TOKEN }}}}" \\
+          "https://gitcanvas-api.vercel.app/api/actions?username={username}&theme={selected_theme}" \\
+          -o github-actions-stats.svg
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add github-actions-stats.svg
+          git commit -m "Update GitHub Actions stats [skip ci]" || echo "No changes to commit"
+          git push
+"""
+                st.code(workflow_yaml, language="yaml")
+                st.info("💡 **Setup Instructions:**\n1. Create `.github/workflows/gitcanvas.yml` in your repo.\n2. Paste the code above.\n3. Add a secret named `GITCANVAS_TOKEN` in your repo settings with a Classic Personal Access Token (repo scope).")
     else:
         st.warning("No GitHub Actions data could be loaded for this account.")
