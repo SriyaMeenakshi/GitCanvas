@@ -1,9 +1,9 @@
 import streamlit as st  # type: ignore
-import streamlit.components.v1 as components
 import base64
 import os
 import re
 import requests
+from urllib.parse import quote
 
 # HEX color regex validation pattern
 HEX_COLOR_REGEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
@@ -454,8 +454,12 @@ def show_code_area(code_content, label="Markdown Code"):
 
 
 def render_embedded_html(html_content: str, *, height: int) -> None:
-    """Render embedded HTML using Streamlit's components API."""
-    components.html(html_content, height=height, scrolling=False)
+    """Render embedded HTML in an iframe using a data URL.
+
+    Streamlit deprecates st.components.v1.html after 2026-06-01.
+    """
+    data_url = "data:text/html;charset=utf-8," + quote(html_content)
+    st.iframe(data_url, height=height, scrolling=False)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
     col1, col2 = st.columns([1.5, 1])
@@ -719,7 +723,25 @@ with tab2:
     excluded_languages_str = ",".join(excluded_languages) if excluded_languages else None
     
     # Generate card with exclusions - Pass selected_theme string
-    svg_bytes = lang_card.draw_lang_card(data, selected_theme, custom_colors, excluded_languages=excluded_languages, animations_enabled=animations_enabled)
+    try:
+        svg_bytes = lang_card.draw_lang_card(
+            data,
+            selected_theme,
+            custom_colors,
+            excluded_languages=excluded_languages,
+            animations_enabled=animations_enabled,
+        )
+    except TypeError as e:
+        # Backward compatibility for deployments where lang_card.py does not yet
+        # accept the animations_enabled argument.
+        if "unexpected keyword argument 'animations_enabled'" not in str(e):
+            raise
+        svg_bytes = lang_card.draw_lang_card(
+            data,
+            selected_theme,
+            custom_colors,
+            excluded_languages=excluded_languages,
+        )
     render_tab(svg_bytes, "languages", username, selected_theme, custom_colors, code_template="![Top Langs]({url})", excluded_languages=excluded_languages_str, output_format=output_format, font_override=font_override)
 
 with tab3:
