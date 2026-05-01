@@ -181,10 +181,10 @@ with st.sidebar:
 
     # Only update the active username when form is submitted
     if submitted:
-        st.session_state["last_username"] = username
+        st.session_state["last_username"] = username.strip()
 
     # Use last confirmed username — avoids mid-typing API calls
-    username = st.session_state.get("last_username", "torvalds")
+    username = st.session_state.get("last_username", "torvalds").strip()
     # ── End debounce fix ─────────────────────────────────────────────────
 
     
