@@ -2,7 +2,13 @@
 import base64
 import streamlit as st
 
-from generators.svg_base import get_svg_font_style
+try:
+    from generators.svg_base import get_svg_font_style as _shared_get_svg_font_style
+except (ImportError, AttributeError):
+    def _shared_get_svg_font_style(font_family):
+        if not font_family:
+            return ""
+        return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
 
 
 def _generate_mini_svg(theme_name: str, theme: dict, font_override: str | None = None) -> str:
@@ -62,7 +68,7 @@ def _generate_mini_svg(theme_name: str, theme: dict, font_override: str | None =
         <rect x="{bar_x}" y="{by}" width="{w}" height="6" rx="3"
               fill="{color}" opacity="{op}"/>"""
 
-        font_style = get_svg_font_style(font)
+        font_style = _shared_get_svg_font_style(font)
 
         return f"""<svg xmlns="http://www.w3.org/2000/svg"
     width="200" height="140" viewBox="0 0 200 140">
