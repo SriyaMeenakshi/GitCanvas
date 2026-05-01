@@ -379,6 +379,7 @@ def draw_calendar_heatmap_card(
     grid_start = start_date - timedelta(days=(start_date.weekday() + 1) % 7)
 
     month_seen = set()
+    month_label_y = start_y - 6
     for col in range(53):
         week_start = grid_start + timedelta(days=col * 7)
         label_date = week_start
@@ -387,7 +388,7 @@ def draw_calendar_heatmap_card(
             month_seen.add(month_key)
             dwg.add(dwg.text(
                 label_date.strftime("%b"),
-                insert=(start_x + col * (cell_size + gap) - 2, 58),
+                insert=(start_x + col * (cell_size + gap) - 2, month_label_y),
                 fill=theme["text_color"],
                 font_size=9,
                 font_family=theme.get("font_family", "Arial"),
