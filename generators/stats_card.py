@@ -388,10 +388,7 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
         "font_weight": "bold"
     }
     
-    if animations_enabled:
-        dwg.add(dwg.text(f"{username}'s Stats", **title_params))
-    else:
-        dwg.add(dwg.text(f"{username}'s Stats", **title_params))
+    dwg.add(dwg.text(f"{username}'s Stats", **title_params))
     
     # Stats with animations
     start_y = 65
@@ -419,10 +416,7 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
                 "fill": theme["icon_color"]
             }
             
-            if animations_enabled:
-                dwg.add(dwg.circle(**icon_params))
-            else:
-                dwg.add(dwg.circle(**icon_params))
+            dwg.add(dwg.circle(**icon_params))
             
             # Label with fade-in animation
             label_params = {
@@ -432,10 +426,7 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
                 "font_family": font_family
             }
             
-            if animations_enabled:
-                dwg.add(dwg.text(f"{label}:", **label_params))
-            else:
-                dwg.add(dwg.text(f"{label}:", **label_params))
+            dwg.add(dwg.text(f"{label}:", **label_params))
             
             # Value with slide-up animation and counting effect
             value_params = {
@@ -447,10 +438,7 @@ def draw_stats_card(data, theme_name="Default", show_options=None, custom_colors
                 "font_weight": "bold"
             }
             
-            if animations_enabled:
-                dwg.add(dwg.text(f"{display_value}", **value_params))
-            else:
-                dwg.add(dwg.text(f"{display_value}", **value_params))
+            dwg.add(dwg.text(f"{display_value}", **value_params))
                              
             current_y += item_height
             

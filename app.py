@@ -27,6 +27,14 @@ from utils.theme_storage import get_storage_backend
 from utils.error_card import draw_error_card
 from generators.visual_elements import emoji_element, gif_element, sticker_element
 try:
+    from generators.svg_base import get_svg_font_style as _shared_get_svg_font_style
+except (ImportError, AttributeError):
+    def _shared_get_svg_font_style(font_family):
+        if not font_family:
+            return ""
+        return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
+
+try:
     from generators.visual_elements import create_composite_canvas
 except ImportError:
     def create_composite_canvas(svg_elements: list, bg_color: str = "#0d1117", padding: int = 20) -> str:
@@ -207,14 +215,13 @@ with st.sidebar:
     st.markdown("**Font Override**")
     FONT_OPTIONS = [
         "Theme Default",
-        "Inter", "Roboto", "Poppins", "Lato", "Montserrat",
-        "Ubuntu", "Nunito", "Merriweather", "Playfair",
-        "Fira Code", "JetBrains Mono", "Space Mono"
+        "Rubik", "Oswald", "Orbitron", "Fira Code",
+        "Dancing Script", "Great Vibes", "Pacifico"
     ]
     selected_font = st.selectbox(
         "Card Font",
         FONT_OPTIONS,
-        help="Override the theme's default font for all generated cards."
+        help="Small, high-contrast font set with visibly different styles."
     )
     # None means use theme default — only pass if user picked something
     font_override = None if selected_font == "Theme Default" else selected_font
@@ -505,11 +512,13 @@ current_theme_opts = all_themes.get(selected_theme, all_themes["Default"]).copy(
 if custom_colors:
     current_theme_opts.update(custom_colors)
 
-# Add font override to custom_colors if set
-if font_override and custom_colors:
-    custom_colors["font_family"] = font_override
-elif font_override:
-    custom_colors = {"font_family": font_override}
+# Add font override everywhere it is consumed so all renderers see the same font.
+if font_override:
+    current_theme_opts["font_family"] = font_override
+    if custom_colors:
+        custom_colors = {**custom_colors, "font_family": font_override}
+    else:
+        custom_colors = {"font_family": font_override}
 
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
@@ -534,6 +543,17 @@ def render_embedded_html(html_content: str, *, height: int) -> None:
     st.iframe(data_url, height=height)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
+    if font_override:
+        font_style = _shared_get_svg_font_style(font_override)
+        if font_style and "<svg" in svg_bytes:
+            svg_open = svg_bytes.find(">")
+            if svg_open != -1:
+                svg_bytes = (
+                    svg_bytes[: svg_open + 1]
+                    + f"<defs><style type=\"text/css\"><![CDATA[{font_style}]]></style></defs>"
+                    + svg_bytes[svg_open + 1 :]
+                )
+
     col1, col2 = st.columns([1.5, 1])
     with col1:
         # Render SVG
@@ -1352,6 +1372,7 @@ with tab13:
     # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
 with tab14:
     chosen_theme = render_theme_gallery(all_themes, selected_theme)
+    chosen_theme = render_theme_gallery(all_themes, selected_theme, font_override=font_override)
     if chosen_theme:
         st.session_state["gallery_selected_theme"] = chosen_theme
         st.rerun()

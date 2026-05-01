@@ -4,6 +4,7 @@ Add this to your GitCanvas Streamlit app
 """
 
 import streamlit as st
+import requests
 from typing import Any
 from ai.ai_roast_service import generate_profile_roast
 from utils.github_utils import fetch_github_stats

@@ -2,8 +2,16 @@
 import base64
 import streamlit as st
 
+try:
+    from generators.svg_base import get_svg_font_style as _shared_get_svg_font_style
+except (ImportError, AttributeError):
+    def _shared_get_svg_font_style(font_family):
+        if not font_family:
+            return ""
+        return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
 
-def _generate_mini_svg(theme_name: str, theme: dict) -> str:
+
+def _generate_mini_svg(theme_name: str, theme: dict, font_override: str | None = None) -> str:
     """
     Generates a rich 200x140 SVG that accurately represents a theme's
     full visual identity — gradient headers, contribution grid simulation,
@@ -14,7 +22,7 @@ def _generate_mini_svg(theme_name: str, theme: dict) -> str:
     title_col = theme.get("title_color",     "#58a6ff")
     text_col  = theme.get("text_color",      "#c9d1d9")
     icon_col  = theme.get("icon_color",      "#8b949e")
-    font      = theme.get("font_family",     "Segoe UI, Ubuntu, sans-serif")
+    font      = font_override or theme.get("font_family", "Segoe UI, Ubuntu, sans-serif")
     font_size = theme.get("title_font_size", 14)
 
     pretty_name = theme_name.replace("_", " ")
@@ -60,9 +68,14 @@ def _generate_mini_svg(theme_name: str, theme: dict) -> str:
         <rect x="{bar_x}" y="{by}" width="{w}" height="6" rx="3"
               fill="{color}" opacity="{op}"/>"""
 
-    return f"""<svg xmlns="http://www.w3.org/2000/svg"
+        font_style = _shared_get_svg_font_style(font)
+
+        return f"""<svg xmlns="http://www.w3.org/2000/svg"
     width="200" height="140" viewBox="0 0 200 140">
   <defs>
+        <style type="text/css"><![CDATA[
+        {font_style}
+        ]]></style>
     <linearGradient id="hdr_{theme_name.replace(' ','_')}" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%"   stop-color="{accent}" stop-opacity="0.25"/>
       <stop offset="100%" stop-color="{bg}"      stop-opacity="0"/>
@@ -160,7 +173,7 @@ def _generate_mini_svg(theme_name: str, theme: dict) -> str:
 </svg>"""
 
 
-def render_theme_gallery(all_themes: dict, current_theme: str) -> str | None:
+def render_theme_gallery(all_themes: dict, current_theme: str, font_override: str | None = None) -> str | None:
     """
     Renders a responsive 4-column theme gallery.
     Cards show actual theme colours, contribution grid, language bars,
@@ -202,9 +215,9 @@ def render_theme_gallery(all_themes: dict, current_theme: str) -> str | None:
     """, unsafe_allow_html=True)
 
     @st.cache_data(show_spinner=False)
-    def _build_svg_map(themes_snapshot: tuple) -> dict:
+    def _build_svg_map(themes_snapshot: tuple, font_override: str | None) -> dict:
         return {
-            name: _generate_mini_svg(name, dict(props))
+            name: _generate_mini_svg(name, dict(props), font_override=font_override)
             for name, props in themes_snapshot
         }
 
@@ -212,7 +225,7 @@ def render_theme_gallery(all_themes: dict, current_theme: str) -> str | None:
         (name, tuple(sorted(props.items())))
         for name, props in all_themes.items()
     )
-    svg_map   = _build_svg_map(themes_snapshot)
+    svg_map   = _build_svg_map(themes_snapshot, font_override)
     selected  = None
     themes_list = list(all_themes.items())
 
