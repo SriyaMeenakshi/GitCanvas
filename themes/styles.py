@@ -10,6 +10,17 @@ THEMES = {
         "text_font_size": 14,
         "tags": ["dark", "minimal", "clean", "popular"]
     },
+    "Iron-Man-Cinematic": {
+    "bg_color": "#1a0000",
+    "border_color": "#ff0000",
+    "title_color": "#ffcc00",
+    "text_color": "#ffffff",
+    "icon_color": "#ffcc00",
+    "font_family": "'Orbitron', monospace",
+    "title_font_size": 22,
+    "text_font_size": 14,
+    "tags": ["stark-industries", "cinematic", "glow", "hud"]
+},
     "Music": {
         "bg_color": "#0d0d0d",
         "border_color": "#9d00ff",
