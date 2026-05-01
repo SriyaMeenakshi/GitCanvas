@@ -215,13 +215,13 @@ with st.sidebar:
     st.markdown("**Font Override**")
     FONT_OPTIONS = [
         "Theme Default",
-        "Inter", "Rubik", "Merriweather", "Playfair Display",
-        "Oswald", "Orbitron", "Fira Code"
+        "Rubik", "Oswald", "Orbitron", "Fira Code",
+        "Dancing Script", "Great Vibes", "Pacifico"
     ]
     selected_font = st.selectbox(
         "Card Font",
         FONT_OPTIONS,
-        help="Curated high-contrast font set for visible card changes."
+        help="Small, high-contrast font set with visibly different styles."
     )
     # None means use theme default — only pass if user picked something
     font_override = None if selected_font == "Theme Default" else selected_font
