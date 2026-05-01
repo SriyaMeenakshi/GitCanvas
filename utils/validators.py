@@ -62,6 +62,16 @@ def validate_theme(theme: str) -> str:
     # Backward-compatible aliases for renamed predefined themes.
     theme_aliases = {
         "Music 🎼": "Music",
+        "Aesthetic_glass": "Aesthetic Glass",
+        "Aesthetic_neon": "Aesthetic Neon",
+        "Aesthetic_sunset": "Aesthetic Sunset",
+        "Calm_lavender": "Calm Lavender",
+        "Calm_ocean": "Calm Ocean",
+        "Calm_sand": "Calm Sand",
+        "Minimal_dark": "Minimal Dark",
+        "Minimal_light": "Minimal Light",
+        "Minimal_mono": "Minimal Mono",
+        "Aurora_gradient": "Aurora Gradient",
     }
     theme = theme_aliases.get(theme, theme)
 

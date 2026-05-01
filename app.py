@@ -505,11 +505,13 @@ current_theme_opts = all_themes.get(selected_theme, all_themes["Default"]).copy(
 if custom_colors:
     current_theme_opts.update(custom_colors)
 
-# Add font override to custom_colors if set
-if font_override and custom_colors:
-    custom_colors["font_family"] = font_override
-elif font_override:
-    custom_colors = {"font_family": font_override}
+# Add font override everywhere it is consumed so all renderers see the same font.
+if font_override:
+    current_theme_opts["font_family"] = font_override
+    if custom_colors:
+        custom_colors = {**custom_colors, "font_family": font_override}
+    else:
+        custom_colors = {"font_family": font_override}
 
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
@@ -1343,7 +1345,7 @@ with tab12:
 
     # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
 with tab13:
-    chosen_theme = render_theme_gallery(all_themes, selected_theme)
+    chosen_theme = render_theme_gallery(all_themes, selected_theme, font_override=font_override)
     if chosen_theme:
         st.session_state["gallery_selected_theme"] = chosen_theme
         st.rerun()

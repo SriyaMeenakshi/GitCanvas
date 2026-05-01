@@ -44,15 +44,15 @@ def test_forest_theme_is_registered_with_tags():
 def test_new_aesthetic_calm_minimal_themes_have_required_schema():
     themes = get_all_themes()
     new_theme_names = [
-        "Aesthetic_glass",
-        "Aesthetic_neon",
-        "Aesthetic_sunset",
-        "Calm_lavender",
-        "Calm_ocean",
-        "Calm_sand",
-        "Minimal_dark",
-        "Minimal_light",
-        "Minimal_mono",
+        "Aesthetic Glass",
+        "Aesthetic Neon",
+        "Aesthetic Sunset",
+        "Calm Lavender",
+        "Calm Ocean",
+        "Calm Sand",
+        "Minimal Dark",
+        "Minimal Light",
+        "Minimal Mono",
     ]
 
     for theme_name in new_theme_names:
@@ -61,3 +61,8 @@ def test_new_aesthetic_calm_minimal_themes_have_required_schema():
         assert "font_family" in theme
         assert isinstance(theme["font_family"], str)
         assert theme["font_family"].strip() != ""
+
+
+def test_spider_man_theme_is_registered():
+    themes = get_all_themes()
+    assert "Spider-Man" in themes

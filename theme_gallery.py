@@ -3,7 +3,7 @@ import base64
 import streamlit as st
 
 
-def _generate_mini_svg(theme_name: str, theme: dict) -> str:
+def _generate_mini_svg(theme_name: str, theme: dict, font_override: str | None = None) -> str:
     """
     Generates a rich 200x140 SVG that accurately represents a theme's
     full visual identity — gradient headers, contribution grid simulation,
@@ -14,7 +14,7 @@ def _generate_mini_svg(theme_name: str, theme: dict) -> str:
     title_col = theme.get("title_color",     "#58a6ff")
     text_col  = theme.get("text_color",      "#c9d1d9")
     icon_col  = theme.get("icon_color",      "#8b949e")
-    font      = theme.get("font_family",     "Segoe UI, Ubuntu, sans-serif")
+    font      = font_override or theme.get("font_family", "Segoe UI, Ubuntu, sans-serif")
     font_size = theme.get("title_font_size", 14)
 
     pretty_name = theme_name.replace("_", " ")
@@ -160,7 +160,7 @@ def _generate_mini_svg(theme_name: str, theme: dict) -> str:
 </svg>"""
 
 
-def render_theme_gallery(all_themes: dict, current_theme: str) -> str | None:
+def render_theme_gallery(all_themes: dict, current_theme: str, font_override: str | None = None) -> str | None:
     """
     Renders a responsive 4-column theme gallery.
     Cards show actual theme colours, contribution grid, language bars,
@@ -202,9 +202,9 @@ def render_theme_gallery(all_themes: dict, current_theme: str) -> str | None:
     """, unsafe_allow_html=True)
 
     @st.cache_data(show_spinner=False)
-    def _build_svg_map(themes_snapshot: tuple) -> dict:
+    def _build_svg_map(themes_snapshot: tuple, font_override: str | None) -> dict:
         return {
-            name: _generate_mini_svg(name, dict(props))
+            name: _generate_mini_svg(name, dict(props), font_override=font_override)
             for name, props in themes_snapshot
         }
 
@@ -212,7 +212,7 @@ def render_theme_gallery(all_themes: dict, current_theme: str) -> str | None:
         (name, tuple(sorted(props.items())))
         for name, props in all_themes.items()
     )
-    svg_map   = _build_svg_map(themes_snapshot)
+    svg_map   = _build_svg_map(themes_snapshot, font_override)
     selected  = None
     themes_list = list(all_themes.items())
 
