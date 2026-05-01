@@ -719,7 +719,7 @@ with tab2:
     excluded_languages_str = ",".join(excluded_languages) if excluded_languages else None
     
     # Generate card with exclusions - Pass selected_theme string
-    svg_bytes = lang_card.draw_lang_card(data, selected_theme, custom_colors, excluded_languages=excluded_languages)
+    svg_bytes = lang_card.draw_lang_card(data, selected_theme, custom_colors, excluded_languages=excluded_languages, animations_enabled=animations_enabled)
     render_tab(svg_bytes, "languages", username, selected_theme, custom_colors, code_template="![Top Langs]({url})", excluded_languages=excluded_languages_str, output_format=output_format, font_override=font_override)
 
 with tab3:
@@ -741,7 +741,7 @@ with tab3:
         filtered_data["top_repos"] = [r for r in filtered_data["top_repos"] if not r.get("is_fork", False)]
     
     compact_repo = st.checkbox("📐 Compact Layout", value=False, help="Slim 300px card — fit multiple cards in one README row", key="compact_repo")
-    svg_bytes = repo_card.draw_repo_card(filtered_data, selected_theme, custom_colors, sort_by=sort_by, limit=repo_limit, compact=compact_repo)
+    svg_bytes = repo_card.draw_repo_card(filtered_data, selected_theme, custom_colors, sort_by=sort_by, limit=repo_limit, compact=compact_repo, animations_enabled=animations_enabled)
     render_tab(svg_bytes, "repos", username, selected_theme, custom_colors, code_template="![Top Repos]({url})", output_format=output_format, font_override=font_override)
 
 with tab4:
@@ -797,7 +797,7 @@ with tab5:
     st.subheader("GitHub Streak")
     st.caption("🔥 Track your contribution streaks! Shows current consecutive days and your all-time longest streak.")
     
-    svg_bytes = streak_card.draw_streak_card(data, selected_theme, custom_colors)
+    svg_bytes = streak_card.draw_streak_card(data, selected_theme, custom_colors, animations_enabled=animations_enabled)
     render_tab(svg_bytes, "streak", username, selected_theme, custom_colors, code_template="![GitHub Streak]({url})", output_format=output_format, font_override=font_override)
 
 with tab6:
@@ -838,7 +838,8 @@ with tab6:
                     social_data,
                     selected_theme,
                     custom_colors,
-                    selected_platforms
+                    selected_platforms,
+                    animations_enabled=animations_enabled
                 )
                 b64 = base64.b64encode(svg_bytes.encode('utf-8')).decode("utf-8")
                 st.markdown(f'<img src="data:image/svg+xml;base64,{b64}" style="max-width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-radius: 10px;"/>', unsafe_allow_html=True)
@@ -1011,7 +1012,7 @@ with tab10:
         try:
             # Pass selected_theme string
             svg_bytes = recent_activity_card.draw_recent_activity_card(
-                {"username": username}, selected_theme, custom_colors, token=effective_github_token
+                {"username": username}, selected_theme, custom_colors, token=effective_github_token, animations_enabled=animations_enabled
             )
         except requests.RequestException as e:
             st.error(f"Network error fetching recent activity: {type(e).__name__}. Check your connection and try again.")
@@ -1085,7 +1086,7 @@ with tab12:
         # Add a default for testing
         trophy_data["created_at"] = "2010-01-01T00:00:00Z"
     
-    svg_bytes = trophy_card.draw_trophy_card(trophy_data, selected_theme, custom_colors)
+    svg_bytes = trophy_card.draw_trophy_card(trophy_data, selected_theme, custom_colors, animations_enabled=animations_enabled)
     render_tab(svg_bytes, "trophy", username, selected_theme, custom_colors, code_template="![GitHub Trophy]({url})", output_format=output_format, font_override=font_override)
 
     # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────

@@ -1,9 +1,9 @@
 import svgwrite
 import math
 from themes.styles import THEMES
-from .svg_base import create_svg_base
+from .svg_base import create_svg_base, CSS_ANIMATIONS
 
-def draw_lang_card(data, theme_name="Default", custom_colors=None, excluded_languages=None):
+def draw_lang_card(data, theme_name="Default", custom_colors=None, excluded_languages=None, animations_enabled=True):
     """
     Generates the Top Languages Card SVG.
     
@@ -77,6 +77,8 @@ def draw_lang_card(data, theme_name="Default", custom_colors=None, excluded_lang
         
         # 1. Definitions
         dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {width} {height}")
+        if animations_enabled:
+            dwg.defs.add(dwg.style(CSS_ANIMATIONS))
         
         # Blur filter for background blobs
         blob_blur = dwg.filter(id="blobBlur", x="-50%", y="-50%", width="200%", height="200%")
@@ -162,6 +164,8 @@ def draw_lang_card(data, theme_name="Default", custom_colors=None, excluded_lang
     else:
         # DEFAULT / OTHER THEMES
         dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {width} {height}")
+        if animations_enabled:
+            dwg.defs.add(dwg.style(CSS_ANIMATIONS))
         
         # Background
         dwg.add(dwg.rect(insert=(0, 0), size=("100%", "100%"), rx=10, ry=10, 
