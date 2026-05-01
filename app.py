@@ -216,8 +216,12 @@ with st.sidebar:
     FONT_OPTIONS = [
         "Theme Default",
         "Inter", "Roboto", "Poppins", "Lato", "Montserrat",
-        "Ubuntu", "Nunito", "Merriweather", "Playfair",
-        "Fira Code", "JetBrains Mono", "Space Mono"
+        "Ubuntu", "Nunito", "DM Sans", "Work Sans", "Rubik",
+        "Mulish", "Open Sans", "Raleway", "Source Sans 3",
+        "Merriweather", "Playfair Display", "Oswald", "Anton",
+        "Bebas Neue", "Orbitron", "Cinzel", "Josefin Sans",
+        "Fira Code", "JetBrains Mono", "Source Code Pro",
+        "IBM Plex Mono", "IBM Plex Sans", "Space Mono"
     ]
     selected_font = st.selectbox(
         "Card Font",
