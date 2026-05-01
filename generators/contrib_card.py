@@ -349,7 +349,7 @@ def draw_calendar_heatmap_card(
     empty_cell_color = "#161b22" if _is_dark_theme_color(empty_cell_color) else "#ebedf0"
     future_outline = theme.get("border_color", "#30363d")
     width = 735
-    height = 169
+    height = 182
     cell_size = 10
     gap = 2
     start_x = 70
@@ -367,14 +367,7 @@ def draw_calendar_heatmap_card(
         font_family=theme.get("font_family", "Arial"),
         font_weight="bold",
     ))
-    dwg.add(dwg.text(
-        f"{sum(selected_counts)} contributions in the last year",
-        insert=(20, 40),
-        fill=theme["text_color"],
-        font_size=10,
-        font_family=theme.get("font_family", "Arial"),
-        opacity=0.78,
-    ))
+    summary_text = f"{sum(selected_counts)} contributions in the last year"
 
     grid_start = start_date - timedelta(days=(start_date.weekday() + 1) % 7)
 
@@ -448,7 +441,17 @@ def draw_calendar_heatmap_card(
                     ry=2,
                 ))
 
-    legend_y = 142
+    footer_y = start_y + (7 * (cell_size + gap) - gap) + 18
+    dwg.add(dwg.text(
+        summary_text,
+        insert=(20, footer_y),
+        fill=theme["text_color"],
+        font_size=10,
+        font_family=theme.get("font_family", "Arial"),
+        opacity=0.78,
+    ))
+
+    legend_y = footer_y
     legend_x = 520
     dwg.add(dwg.text(
         "Less",
