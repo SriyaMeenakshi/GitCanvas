@@ -1,5 +1,6 @@
 import streamlit as st  # type: ignore
 import base64
+import json
 import os
 import re
 import requests
@@ -23,12 +24,63 @@ from utils.cache import clear_cache as clear_ttl_cache
 from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
 from utils.theme_storage import get_storage_backend
 from utils.error_card import draw_error_card
-from generators.visual_elements import (
-    emoji_element,
-    gif_element,
-    sticker_element,
-    create_composite_canvas
-)
+from generators.visual_elements import emoji_element, gif_element, sticker_element
+try:
+    from generators.visual_elements import create_composite_canvas
+except ImportError:
+    def create_composite_canvas(svg_elements: list, bg_color: str = "#0d1117", padding: int = 20) -> str:
+        """Fallback canvas renderer when create_composite_canvas is unavailable."""
+        if not svg_elements:
+            return f"""
+            <svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+                <rect width="600" height="400" fill="{bg_color}"/>
+                <text x="300" y="200" text-anchor="middle" dominant-baseline="middle"
+                      fill="#888" font-size="16px" font-family="Arial">
+                    Your canvas is empty. Add elements to get started!
+                </text>
+            </svg>
+            """
+
+        import math
+
+        cols = math.ceil(math.sqrt(len(svg_elements)))
+        rows = math.ceil(len(svg_elements) / cols)
+        element_width = 140
+        element_height = 140
+        canvas_width = cols * (element_width + padding) + padding
+        canvas_height = rows * (element_height + padding) + padding
+
+        svg_content_list = []
+        for idx, svg_str in enumerate(svg_elements):
+            start = svg_str.find('>') + 1
+            end = svg_str.rfind('</svg>')
+            if start > 0 and end > start:
+                svg_content_list.append((idx, svg_str[start:end]))
+
+        composite = f"""
+        <svg xmlns="http://www.w3.org/2000/svg" width="{canvas_width}" height="{canvas_height}" viewBox="0 0 {canvas_width} {canvas_height}">
+            <rect width="{canvas_width}" height="{canvas_height}" fill="{bg_color}"/>
+            <style>
+                .canvas-border {{ stroke: #30363d; stroke-width: 1; fill: none; }}
+            </style>
+        """
+
+        for idx, content in svg_content_list:
+            col = idx % cols
+            row = idx // cols
+            x = padding + col * (element_width + padding)
+            y = padding + row * (element_height + padding)
+            composite += f"""
+            <g transform="translate({x}, {y})">
+                <rect x="0" y="0" width="{element_width}" height="{element_height}"
+                      class="canvas-border" rx="8"/>
+                <g transform="translate({element_width/2}, {element_height/2}) scale(1)">
+                    {content}
+                </g>
+            </g>
+            """
+
+        return composite + "</svg>"
 from theme_gallery import render_theme_gallery 
 
 
@@ -1159,7 +1211,7 @@ with tab11:
             svg_b64 = base64.b64encode(canvas_svg.encode("utf-8")).decode("utf-8")
             filename_prefix_safe = json.dumps(f"canvas_{username}")
             
-            st.components.v1.html(f"""
+            render_embedded_html(f"""
             <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
                 <button onclick="downloadCanvasAs('png')" style="
                     width:100%; padding:8px; font-size:12px; cursor:pointer;
