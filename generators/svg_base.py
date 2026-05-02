@@ -1,6 +1,35 @@
 import svgwrite
 from themes.styles import THEMES
 
+
+_FONT_FACE_MAP = {
+    "rubik": ("Rubik", "Rubik:wght@400;500;600;700;800", "'Rubik', sans-serif"),
+    "oswald": ("Oswald", "Oswald:wght@400;500;600;700", "'Oswald', sans-serif"),
+    "orbitron": ("Orbitron", "Orbitron:wght@400;500;600;700;800;900", "'Orbitron', sans-serif"),
+    "firacode": ("Fira Code", "Fira+Code:wght@400;500;600;700", "'Fira Code', monospace"),
+    "dancingscript": ("Dancing Script", "Dancing+Script:wght@400;500;600;700", "'Dancing Script', cursive"),
+    "greatvibes": ("Great Vibes", "Great+Vibes", "'Great Vibes', cursive"),
+    "pacifico": ("Pacifico", "Pacifico", "'Pacifico', cursive"),
+}
+
+
+def get_svg_font_style(font_family):
+    """Return SVG CSS that loads and applies a selected font family."""
+    if not font_family:
+        return ""
+
+    normalized = str(font_family).replace("'", "").replace('"', "").split(",")[0].strip().lower().replace(" ", "")
+    font_info = _FONT_FACE_MAP.get(normalized)
+
+    if font_info:
+        _display_name, query_name, css_stack = font_info
+        return (
+            f"@import url('https://fonts.googleapis.com/css2?family={query_name}&display=swap');\n"
+            f"text, tspan, .svg-font {{ font-family: {css_stack} !important; }}"
+        )
+
+    return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
+
 # CSS Animation Definitions - Reusable across all card generators
 CSS_ANIMATIONS = """
     /* Fade In Animation */
@@ -135,6 +164,10 @@ CSS_ANIMATIONS = """
     .anim-bubble {
         animation: bubbleFloat 3s ease-in-out infinite;
     }
+    
+    .anim-progress-fill {
+        animation: progressFill 1s ease-out forwards;
+    }
 """
 
 
@@ -172,10 +205,15 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
     if custom_colors:
         theme.update(custom_colors)
     
-    dwg = svgwrite.Drawing(size=(f"{width}px", f"{height}px"))
+    dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {width} {height}")
     
-    # Note: CSS animations disabled due to svgwrite validation constraints
-    
+    # Inject CSS animations
+    if animations_enabled:
+        dwg.defs.add(dwg.style(CSS_ANIMATIONS))
+
+    font_style = get_svg_font_style(theme.get("font_family"))
+    if font_style:
+        dwg.defs.add(dwg.style(font_style))
     # Background with optional border pulse animation
     bg_params = {
         "insert": (0, 0), 
@@ -187,11 +225,6 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
         "stroke_width": 2
     }
     
-    if animations_enabled:
-        dwg.add(dwg.rect(**bg_params))
-    else:
-        dwg.add(dwg.rect(**bg_params))
-    
     # Title with animation
     title_params = {
         "insert": (20, 30),
@@ -202,9 +235,11 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
     }
     
     if animations_enabled:
-        dwg.add(dwg.text(title_text, **title_params))
-    else:
-        dwg.add(dwg.text(title_text, **title_params))
+        bg_params["class_"] = "anim-fade-in"
+        title_params["class_"] = "anim-slide-up"
+        
+    dwg.add(dwg.rect(**bg_params))
+    dwg.add(dwg.text(title_text, **title_params))
     
     return dwg, theme
 

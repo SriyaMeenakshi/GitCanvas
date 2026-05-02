@@ -1,9 +1,10 @@
 import streamlit as st  # type: ignore
-import streamlit.components.v1 as components
 import base64
+import json
 import os
 import re
 import requests
+from urllib.parse import quote
 
 # HEX color regex validation pattern
 HEX_COLOR_REGEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
@@ -12,7 +13,7 @@ from config.settings import get_settings
 from roast_widget_streamlit import render_roast_widget
 from compliment_widget_streamlit import render_compliment_widget
 from ai.description_generator import generate_github_description
-from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card
+from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card, achievement_card
 from utils import github_api
 try:
     from utils.github_utils import get_rate_limit_status as fetch_rate_limit_status
@@ -20,14 +21,75 @@ except ImportError:
     def fetch_rate_limit_status(token: str | None = None) -> dict | None:
         return None
 from utils.cache import clear_cache as clear_ttl_cache
+from utils.theme_state import reset_theme_filter_state
 from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
 from utils.theme_storage import get_storage_backend
 from utils.error_card import draw_error_card
-from generators.visual_elements import (
-    emoji_element,
-    gif_element,
-    sticker_element
-)
+from generators.visual_elements import emoji_element, gif_element, sticker_element
+try:
+    from generators.svg_base import get_svg_font_style as _shared_get_svg_font_style
+except (ImportError, AttributeError):
+    def _shared_get_svg_font_style(font_family):
+        if not font_family:
+            return ""
+        return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
+
+try:
+    from generators.visual_elements import create_composite_canvas
+except ImportError:
+    def create_composite_canvas(svg_elements: list, bg_color: str = "#0d1117", padding: int = 20) -> str:
+        """Fallback canvas renderer when create_composite_canvas is unavailable."""
+        if not svg_elements:
+            return f"""
+            <svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+                <rect width="600" height="400" fill="{bg_color}"/>
+                <text x="300" y="200" text-anchor="middle" dominant-baseline="middle"
+                      fill="#888" font-size="16px" font-family="Arial">
+                    Your canvas is empty. Add elements to get started!
+                </text>
+            </svg>
+            """
+
+        import math
+
+        cols = math.ceil(math.sqrt(len(svg_elements)))
+        rows = math.ceil(len(svg_elements) / cols)
+        element_width = 140
+        element_height = 140
+        canvas_width = cols * (element_width + padding) + padding
+        canvas_height = rows * (element_height + padding) + padding
+
+        svg_content_list = []
+        for idx, svg_str in enumerate(svg_elements):
+            start = svg_str.find('>') + 1
+            end = svg_str.rfind('</svg>')
+            if start > 0 and end > start:
+                svg_content_list.append((idx, svg_str[start:end]))
+
+        composite = f"""
+        <svg xmlns="http://www.w3.org/2000/svg" width="{canvas_width}" height="{canvas_height}" viewBox="0 0 {canvas_width} {canvas_height}">
+            <rect width="{canvas_width}" height="{canvas_height}" fill="{bg_color}"/>
+            <style>
+                .canvas-border {{ stroke: #30363d; stroke-width: 1; fill: none; }}
+            </style>
+        """
+
+        for idx, content in svg_content_list:
+            col = idx % cols
+            row = idx // cols
+            x = padding + col * (element_width + padding)
+            y = padding + row * (element_height + padding)
+            composite += f"""
+            <g transform="translate({x}, {y})">
+                <rect x="0" y="0" width="{element_width}" height="{element_height}"
+                      class="canvas-border" rx="8"/>
+                <g transform="translate({element_width/2}, {element_height/2}) scale(1)">
+                    {content}
+                </g>
+            </g>
+            """
+
+        return composite + "</svg>"
 from theme_gallery import render_theme_gallery 
 
 
@@ -95,6 +157,12 @@ st.markdown("""
 st.title("GitCanvas: Profile Architect 🛠️")
 st.markdown("### Design your GitHub Stats. Copy the Code. Done.")
 
+# Initialize session state for canvas
+if "canvas" not in st.session_state:
+    st.session_state["canvas"] = []
+if "canvas_elements_metadata" not in st.session_state:
+    st.session_state["canvas_elements_metadata"] = []
+
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_cached_rate_limit_status(token: str | None) -> dict | None:
@@ -122,10 +190,10 @@ with st.sidebar:
 
     # Only update the active username when form is submitted
     if submitted:
-        st.session_state["last_username"] = username
+        st.session_state["last_username"] = username.strip()
 
     # Use last confirmed username — avoids mid-typing API calls
-    username = st.session_state.get("last_username", "torvalds")
+    username = st.session_state.get("last_username", "torvalds").strip()
     # ── End debounce fix ─────────────────────────────────────────────────
 
     
@@ -147,14 +215,13 @@ with st.sidebar:
     st.markdown("**Font Override**")
     FONT_OPTIONS = [
         "Theme Default",
-        "Inter", "Roboto", "Poppins", "Lato", "Montserrat",
-        "Ubuntu", "Nunito", "Merriweather", "Playfair",
-        "Fira Code", "JetBrains Mono", "Space Mono"
+        "Rubik", "Oswald", "Orbitron", "Fira Code",
+        "Dancing Script", "Great Vibes", "Pacifico"
     ]
     selected_font = st.selectbox(
         "Card Font",
         FONT_OPTIONS,
-        help="Override the theme's default font for all generated cards."
+        help="Small, high-contrast font set with visibly different styles."
     )
     # None means use theme default — only pass if user picked something
     font_override = None if selected_font == "Theme Default" else selected_font
@@ -228,9 +295,14 @@ with st.sidebar:
     # Customization Expander
     # Ensure custom_colors exists even if the expander isn't opened
     custom_colors = {}
+    theme_defaults = all_themes.get(selected_theme, all_themes["Default"]).copy()
+
+    def _reset_theme_filters():
+        reset_theme_filter_state(st.session_state, selected_theme, theme_defaults)
+
     with st.expander("Customize Colors", expanded=False):
         st.caption("Override theme defaults")
-        default_theme = all_themes.get(selected_theme, all_themes["Default"]).copy() # Copy to avoid mutating global
+        default_theme = theme_defaults  # Copy already taken above to avoid mutating global
         
         # Helper to get color safely
         def get_col(key):
@@ -273,6 +345,13 @@ with st.sidebar:
         if custom_title != get_col("title_color"): custom_colors["title_color"] = custom_title
         if custom_text != get_col("text_color"): custom_colors["text_color"] = custom_text
         if custom_border != get_col("border_color"): custom_colors["border_color"] = custom_border
+
+        st.button(
+            "Reset Theme Filters",
+            use_container_width=True,
+            on_click=_reset_theme_filters,
+            help="Restore this theme's color controls to their default values",
+        )
 
     # Custom Theme Creator Section
     with st.expander("🎨 Custom Theme Creator", expanded=False):
@@ -433,19 +512,21 @@ current_theme_opts = all_themes.get(selected_theme, all_themes["Default"]).copy(
 if custom_colors:
     current_theme_opts.update(custom_colors)
 
-# Add font override to custom_colors if set
-if font_override and custom_colors:
-    custom_colors["font_family"] = font_override
-elif font_override:
-    custom_colors = {"font_family": font_override}
+# Add font override everywhere it is consumed so all renderers see the same font.
+if font_override:
+    current_theme_opts["font_family"] = font_override
+    if custom_colors:
+        custom_colors = {**custom_colors, "font_family": font_override}
+    else:
+        custom_colors = {"font_family": font_override}
 
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
     "Main Stats", "Languages", "Top Repositories", "Contributions",
     "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges",
-    "🔥 AI Roast & Summary", "✨ AI Compliment", "Recent Activity", "✨ Visual Elements",
-    "🏆 Trophy", "🎨 Theme Gallery", "📅 Calendar Heatmap",
-    "⚙️ GitHub Actions"
+    "🔥 AI Roast & Summary", "✨ AI Compliment", "Recent Activity",
+    "✨ Visual Elements", "🏆 Trophy", "🏆 Achievement Room",
+    "🎨 Theme Gallery", "📅 Calendar Heatmap", "⚙️ GitHub Actions"
 ])
 
 def show_code_area(code_content, label="Markdown Code"):
@@ -454,10 +535,25 @@ def show_code_area(code_content, label="Markdown Code"):
 
 
 def render_embedded_html(html_content: str, *, height: int) -> None:
-    """Render embedded HTML using Streamlit's components API."""
-    components.html(html_content, height=height, scrolling=False)
+    """Render embedded HTML in an iframe using a data URL.
+
+    Streamlit deprecates st.components.v1.html after 2026-06-01.
+    """
+    data_url = "data:text/html;charset=utf-8," + quote(html_content)
+    st.iframe(data_url, height=height)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
+    if font_override:
+        font_style = _shared_get_svg_font_style(font_override)
+        if font_style and "<svg" in svg_bytes:
+            svg_open = svg_bytes.find(">")
+            if svg_open != -1:
+                svg_bytes = (
+                    svg_bytes[: svg_open + 1]
+                    + f"<defs><style type=\"text/css\"><![CDATA[{font_style}]]></style></defs>"
+                    + svg_bytes[svg_open + 1 :]
+                )
+
     col1, col2 = st.columns([1.5, 1])
     with col1:
         # Render SVG
@@ -670,7 +766,7 @@ with tab1:
                 
                 <!-- Header Bar -->
                 <div style="color: {theme_color}; font-family: 'Courier New', monospace; font-size: 10px; font-weight: bold; letter-spacing: 1px; padding: 12px 15px 5px 15px; opacity: 0.8; display: flex; justify-content: space-between; border-bottom: 1px dashed {current_theme_opts.get('border_color', '#30363d')}44;">
-                    <span>SYSTEM_ACTIVITY_MONITOR // {username.upper()}</span>
+                    <span>SYSTEM_ACTIVITY_MONITOR // {data.get('username', username).upper()}</span>
                     <span>STATUS: LIVE_FEED</span>
                 </div>
                 
@@ -689,7 +785,8 @@ with tab1:
         for k, v in custom_colors.items():
             _spark_params.append(f"{k}={v.replace('#', '')}")
         _spark_qs = ("?" + "&".join(_spark_params)) if _spark_params else ""
-        _spark_url = f"https://gitcanvas-api.vercel.app/api/sparkline{_spark_qs}&username={username}"
+        _spark_sep = "&" if _spark_qs else "?"
+        _spark_url = f"https://gitcanvas-api.vercel.app/api/sparkline{_spark_qs}{_spark_sep}username={data.get('username', username)}"
 
         if output_format == "HTML":
             _spark_code = f'<img src="{_spark_url}" alt="30-Day Activity Sparkline"/>'
@@ -719,7 +816,25 @@ with tab2:
     excluded_languages_str = ",".join(excluded_languages) if excluded_languages else None
     
     # Generate card with exclusions - Pass selected_theme string
-    svg_bytes = lang_card.draw_lang_card(data, selected_theme, custom_colors, excluded_languages=excluded_languages)
+    try:
+        svg_bytes = lang_card.draw_lang_card(
+            data,
+            selected_theme,
+            custom_colors,
+            excluded_languages=excluded_languages,
+            animations_enabled=animations_enabled,
+        )
+    except TypeError as e:
+        # Backward compatibility for deployments where lang_card.py does not yet
+        # accept the animations_enabled argument.
+        if "unexpected keyword argument 'animations_enabled'" not in str(e):
+            raise
+        svg_bytes = lang_card.draw_lang_card(
+            data,
+            selected_theme,
+            custom_colors,
+            excluded_languages=excluded_languages,
+        )
     render_tab(svg_bytes, "languages", username, selected_theme, custom_colors, code_template="![Top Langs]({url})", excluded_languages=excluded_languages_str, output_format=output_format, font_override=font_override)
 
 with tab3:
@@ -741,7 +856,7 @@ with tab3:
         filtered_data["top_repos"] = [r for r in filtered_data["top_repos"] if not r.get("is_fork", False)]
     
     compact_repo = st.checkbox("📐 Compact Layout", value=False, help="Slim 300px card — fit multiple cards in one README row", key="compact_repo")
-    svg_bytes = repo_card.draw_repo_card(filtered_data, selected_theme, custom_colors, sort_by=sort_by, limit=repo_limit, compact=compact_repo)
+    svg_bytes = repo_card.draw_repo_card(filtered_data, selected_theme, custom_colors, sort_by=sort_by, limit=repo_limit, compact=compact_repo, animations_enabled=animations_enabled)
     render_tab(svg_bytes, "repos", username, selected_theme, custom_colors, code_template="![Top Repos]({url})", output_format=output_format, font_override=font_override)
 
 with tab4:
@@ -797,7 +912,7 @@ with tab5:
     st.subheader("GitHub Streak")
     st.caption("🔥 Track your contribution streaks! Shows current consecutive days and your all-time longest streak.")
     
-    svg_bytes = streak_card.draw_streak_card(data, selected_theme, custom_colors)
+    svg_bytes = streak_card.draw_streak_card(data, selected_theme, custom_colors, animations_enabled=animations_enabled)
     render_tab(svg_bytes, "streak", username, selected_theme, custom_colors, code_template="![GitHub Streak]({url})", output_format=output_format, font_override=font_override)
 
 with tab6:
@@ -838,7 +953,8 @@ with tab6:
                     social_data,
                     selected_theme,
                     custom_colors,
-                    selected_platforms
+                    selected_platforms,
+                    animations_enabled=animations_enabled
                 )
                 b64 = base64.b64encode(svg_bytes.encode('utf-8')).decode("utf-8")
                 st.markdown(f'<img src="data:image/svg+xml;base64,{b64}" style="max-width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-radius: 10px;"/>', unsafe_allow_html=True)
@@ -1011,7 +1127,7 @@ with tab10:
         try:
             # Pass selected_theme string
             svg_bytes = recent_activity_card.draw_recent_activity_card(
-                {"username": username}, selected_theme, custom_colors, token=effective_github_token
+                {"username": username}, selected_theme, custom_colors, token=effective_github_token, animations_enabled=animations_enabled
             )
         except requests.RequestException as e:
             st.error(f"Network error fetching recent activity: {type(e).__name__}. Check your connection and try again.")
@@ -1053,25 +1169,182 @@ with tab11:
     st.subheader("✨ Visual Elements")
     st.markdown("Add emojis, GIFs, or stickers to your canvas")
 
-    element_type = st.selectbox(
-        "Choose element type",
-        ["Emoji", "GIF", "Sticker"]
-    )
-
-    value = st.text_input(
-        "Enter value",
-        placeholder="🔥 or https://gif-url"
-    )
-
-    if st.button("Add to Canvas"):
-        if element_type == "Emoji":
-            svg = emoji_element(value)
-        elif element_type == "GIF":
-            svg = gif_element(value)
+    # --- Canvas Input Section ---
+    col_input1, col_input2, col_input3 = st.columns([2, 2, 1.5])
+    
+    with col_input1:
+        element_type = st.selectbox(
+            "Choose element type",
+            ["Emoji", "GIF", "Sticker"]
+        )
+    
+    with col_input2:
+        value = st.text_input(
+            "Enter value",
+            placeholder="🔥 or https://gif-url"
+        )
+    
+    with col_input3:
+        add_button = st.button("Add to Canvas", use_container_width=True)
+    
+    # Add element to canvas
+    if add_button:
+        if value:
+            if element_type == "Emoji":
+                svg = emoji_element(value)
+            elif element_type == "GIF":
+                svg = gif_element(value)
+            else:
+                svg = sticker_element(value)
+            
+            st.session_state["canvas"].append(svg)
+            st.session_state["canvas_elements_metadata"].append({
+                "type": element_type,
+                "value": value
+            })
+            st.success(f"✅ {element_type} added to canvas!")
         else:
-            svg = sticker_element(value)
+            st.error("❌ Please enter a value")
 
-        st.session_state["canvas"].append(svg)
+    st.markdown("---")
+
+    # --- Canvas Display & Export Section ---
+    if st.session_state["canvas"]:
+        st.subheader("Canvas Preview")
+        
+        # Generate composite canvas
+        canvas_svg = create_composite_canvas(
+            st.session_state["canvas"],
+            bg_color=current_theme_opts.get("bg_color", "#0d1117"),
+            padding=20
+        )
+        
+        # Display canvas
+        col_display, col_actions = st.columns([2, 1])
+        
+        with col_display:
+            b64 = base64.b64encode(canvas_svg.encode('utf-8')).decode("utf-8")
+            st.markdown(
+                f'<img src="data:image/svg+xml;base64,{b64}" style="max-width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-radius: 10px;"/>',
+                unsafe_allow_html=True
+            )
+        
+        with col_actions:
+            st.markdown("**Canvas Actions**")
+            
+            # SVG Download
+            st.download_button(
+                label="⬇️ Download SVG",
+                data=canvas_svg.encode("utf-8"),
+                file_name=f"canvas_{username}.svg",
+                mime="image/svg+xml",
+                use_container_width=True
+            )
+            
+            # PNG & JPEG Download
+            svg_b64 = base64.b64encode(canvas_svg.encode("utf-8")).decode("utf-8")
+            filename_prefix_safe = json.dumps(f"canvas_{username}")
+            
+            render_embedded_html(f"""
+            <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+                <button onclick="downloadCanvasAs('png')" style="
+                    width:100%; padding:8px; font-size:12px; cursor:pointer;
+                    background:#1a1a2e; color:white; border:1px solid #444;
+                    border-radius:6px; font-weight: bold;">
+                    ⬇️ PNG
+                </button>
+                <button onclick="downloadCanvasAs('jpeg')" style="
+                    width:100%; padding:8px; font-size:12px; cursor:pointer;
+                    background:#1a1a2e; color:white; border:1px solid #444;
+                    border-radius:6px; font-weight: bold;">
+                    ⬇️ JPEG
+                </button>
+            </div>
+
+            <script>
+            function downloadCanvasAs(format) {{
+                const svgText = atob('{svg_b64}');
+                const parser = new DOMParser();
+                const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+                const svgEl = svgDoc.documentElement;
+
+                const vb = svgEl.getAttribute('viewBox');
+                let w = 600, h = 400;
+                if (vb) {{
+                    const parts = vb.split(/[\\s,]+/);
+                    w = parseFloat(parts[2]) || 600;
+                    h = parseFloat(parts[3]) || 400;
+                }}
+
+                const blob = new Blob([svgText], {{type: 'image/svg+xml'}});
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = function() {{
+                    const SCALE = 2;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w * SCALE;
+                    canvas.height = h * SCALE;
+                    const ctx = canvas.getContext('2d');
+
+                    if (format === 'jpeg') {{
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    }}
+
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    canvas.toBlob(function(blob) {{
+                        const link = document.createElement('a');
+                        link.download = {filename_prefix_safe} + (format === 'jpeg' ? '.jpeg' : '.png');
+                        link.href = URL.createObjectURL(blob);
+                        link.click();
+                        URL.revokeObjectURL(url);
+                    }}, 'image/' + format, 1.0);
+                }};
+                img.src = url;
+            }}
+            </script>
+            """, height=120)
+        
+        st.markdown("---")
+        st.subheader("Embed Code")
+        
+        # Generate embed URLs/code
+        embed_col1, embed_col2 = st.columns(2)
+        
+        with embed_col1:
+            st.markdown("**Markdown Code**")
+            embed_code = f"![Canvas - {username}](https://your-image-hosting.com/canvas_{username}.svg)"
+            st.text_area("Copy this code:", value=embed_code, height=60, label_visibility="collapsed", key="canvas_markdown_code")
+        
+        with embed_col2:
+            st.markdown("**HTML Code**")
+            html_code = f'<img src="https://your-image-hosting.com/canvas_{username}.svg" alt="Canvas - {username}"/>'
+            st.text_area("Copy this code:", value=html_code, height=60, label_visibility="collapsed", key="canvas_html_code")
+        
+        st.info("💡 **Note:** Download your canvas SVG above and host it on GitHub, Imgur, or any image hosting service, then use the embed code above.")
+        
+        st.markdown("---")
+        st.subheader("Canvas Contents")
+        
+        # Show list of elements
+        for idx, metadata in enumerate(st.session_state["canvas_elements_metadata"]):
+            col_item, col_remove = st.columns([4, 1])
+            with col_item:
+                st.caption(f"**{metadata['type']}** • {metadata['value']}")
+            with col_remove:
+                if st.button("🗑️", key=f"remove_{idx}", help="Remove this element"):
+                    st.session_state["canvas"].pop(idx)
+                    st.session_state["canvas_elements_metadata"].pop(idx)
+                    st.rerun()
+        
+        # Clear canvas button
+        if st.button("🧹 Clear All Canvas", use_container_width=True):
+            st.session_state["canvas"] = []
+            st.session_state["canvas_elements_metadata"] = []
+            st.rerun()
+    else:
+        st.info("👆 Add elements to your canvas to get started. You can mix emojis, GIFs, and stickers!")
 
 # TAB 12: Trophy Card
 with tab12:
@@ -1085,17 +1358,25 @@ with tab12:
         # Add a default for testing
         trophy_data["created_at"] = "2010-01-01T00:00:00Z"
     
-    svg_bytes = trophy_card.draw_trophy_card(trophy_data, selected_theme, custom_colors)
+    svg_bytes = trophy_card.draw_trophy_card(trophy_data, selected_theme, custom_colors, animations_enabled=animations_enabled)
     render_tab(svg_bytes, "trophy", username, selected_theme, custom_colors, code_template="![GitHub Trophy]({url})", output_format=output_format, font_override=font_override)
 
-    # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
+# TAB 13: Achievement Room Card
 with tab13:
-    chosen_theme = render_theme_gallery(all_themes, selected_theme)
+    st.subheader("🏆 Achievement Room")
+    st.markdown("Showcase your GitHub milestones with dynamic achievement badges!")
+    
+    svg_bytes = achievement_card.draw_achievement_card(data, selected_theme, custom_colors, animations_enabled=animations_enabled)
+    render_tab(svg_bytes, "achievements", username, selected_theme, custom_colors, code_template="![Achievement Room]({url})", output_format=output_format, font_override=font_override)
+
+    # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
+with tab14:
+    chosen_theme = render_theme_gallery(all_themes, selected_theme, font_override=font_override)
     if chosen_theme:
         st.session_state["gallery_selected_theme"] = chosen_theme
         st.rerun()
 
-with tab14:
+with tab15:
     st.subheader("📅 Yearly Calendar Heatmap")
     st.caption("A 53-week contribution heatmap with selectable intensity mapping and custom colors.")
 
@@ -1184,7 +1465,7 @@ with tab14:
         },
     )
 
-with tab15:
+with tab16:
     st.subheader("⚙️ GitHub Actions")
     st.caption("Workflow run totals, success rate, and recent runs from GitHub Actions.")
 
@@ -1215,5 +1496,40 @@ with tab15:
                 f'"{example_url}"'
             )
             show_code_area(curl_example, label="Curl Example")
+
+            st.divider()
+            st.subheader("🤖 Automation")
+            st.caption("Use GitHub Actions to automatically update this card in your README every day.")
+            
+            if st.button("Generate Workflow YAML"):
+                workflow_yaml = f"""name: Update GitCanvas Actions Stats
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every day at midnight
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Fetch GitCanvas SVG
+        run: |
+          curl -H "Authorization: Bearer ${{{{ secrets.GITCANVAS_TOKEN }}}}" \\
+          "https://gitcanvas-api.vercel.app/api/actions?username={username}&theme={selected_theme}" \\
+          -o github-actions-stats.svg
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add github-actions-stats.svg
+          git commit -m "Update GitHub Actions stats [skip ci]" || echo "No changes to commit"
+          git push
+"""
+                st.code(workflow_yaml, language="yaml")
+                st.info("💡 **Setup Instructions:**\n1. Create `.github/workflows/gitcanvas.yml` in your repo.\n2. Paste the code above.\n3. Add a secret named `GITCANVAS_TOKEN` in your repo settings with a Classic Personal Access Token (repo scope).")
     else:
         st.warning("No GitHub Actions data could be loaded for this account.")

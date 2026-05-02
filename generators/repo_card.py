@@ -2,7 +2,7 @@ import svgwrite
 from themes.styles import THEMES
 from .svg_base import create_svg_base, draw_card_background, draw_divider_line
 
-def draw_repo_card(data, theme_name="Default", custom_colors=None, sort_by="stars", limit=5, compact=False):
+def draw_repo_card(data, theme_name="Default", custom_colors=None, sort_by="stars", limit=5, compact=False, animations_enabled=True):
     """
     Generates the Top Repositories Card SVG.
     data: dict with 'top_repos' list containing repo data
@@ -44,8 +44,7 @@ def draw_repo_card(data, theme_name="Default", custom_colors=None, sort_by="star
         icon_col   = theme.get("icon_color",   "#8b949e")
         font       = theme.get("font_family",  "Segoe UI, Ubuntu, Sans-Serif")
 
-        c_dwg = svgwrite.Drawing(size=(compact_width, compact_height))
-        c_dwg.viewbox(0, 0, compact_width, compact_height)
+        c_dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {compact_width} {compact_height}")
 
         # Background
         c_dwg.add(c_dwg.rect(
@@ -134,7 +133,7 @@ def draw_repo_card(data, theme_name="Default", custom_colors=None, sort_by="star
     }
     title = f"{sort_labels.get(sort_by, 'Top')} Repositories"
     
-    dwg, theme = create_svg_base(theme_name, custom_colors, width, height, title)
+    dwg, theme = create_svg_base(theme_name, custom_colors, width, height, title, animations_enabled=animations_enabled)
     
     font_family = theme["font_family"]
     text_color = theme["text_color"]

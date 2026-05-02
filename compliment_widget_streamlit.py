@@ -176,7 +176,7 @@ def render_compliment_widget(username: str, profile_data: dict[str, Any] | None 
                             st.error(f"Unexpected error: {type(e).__name__}. Please try again.")
             
             with col2:
-                if st.button("📋 Copy", use_container_width=True):
+                if st.button("📋 Copy", key=f"compliment_copy_{username}", use_container_width=True):
                     st.write("Compliment copied to clipboard!")
                     # Note: Direct clipboard access limited in Streamlit
                     st.code(compliment_text, language=None)

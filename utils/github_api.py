@@ -582,12 +582,13 @@ def get_live_github_data(username, token=None, raise_errors: bool = False):
         # Store all repos including forks for frontend (let user decide)
         all_repos = validated_repos.copy()
         
-        # For stats calculation, filter out forks
+        # Calculate global totals across all fetched repositories
+        total_stars = sum(repo.stargazers_count for repo in validated_repos)
+        total_forks = sum(repo.forks_count for repo in validated_repos)
+        
+        # Filter for non-forks specifically for language distribution and display
         repos_data_no_forks = [repo for repo in validated_repos if not repo.fork]
         
-        total_stars = sum(repo.stargazers_count for repo in repos_data_no_forks)
-        
-        # Languages (Approximation from top repos, excluding forks)
         languages = {}
         for repo in repos_data_no_forks[:10]: # Check top 10 non-fork repos
             lang = repo.language
@@ -653,6 +654,7 @@ def get_live_github_data(username, token=None, raise_errors: bool = False):
         data = {
             "username": username,
             "total_stars": total_stars,
+            "total_forks": total_forks,
             "total_commits": total_commits,
             "public_repos": validated_user.public_repos,
             "followers": validated_user.followers,
