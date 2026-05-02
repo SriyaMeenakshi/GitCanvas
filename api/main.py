@@ -2,19 +2,128 @@ import hashlib
 from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, Response, Request, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+import os
+from io import BytesIO
+import cairosvg
+from PIL import Image
+import re
 from config.settings import get_settings
-from generators import stats_card, lang_card, contrib_card, recent_activity_card, trophy_card, streak_card, repo_card, social_card, badge_generator, actions_card, commit_analysis_card, gist_card
+from generators import stats_card, lang_card, contrib_card, recent_activity_card, trophy_card, streak_card, repo_card, social_card, badge_generator, actions_card, commit_analysis_card
 from utils import github_api
+from utils.error_card import draw_error_card
 from utils.cache import cache_svg_response, get_cache_stats, clear_cache
 from utils.validators import (
     validate_date,
+    validate_font,
     validate_hex_color,
     validate_limit,
     validate_sort_by,
     validate_theme,
     validate_username,
 )
+
+
+def svg_to_image(svg_string: str, fmt: str) -> bytes:
+    """Convert SVG string to image bytes using CairoSVG + Pillow.
+
+    Supports 'PNG' and 'JPEG'. Returns raw image bytes.
+    """
+    target = fmt.lower()
+    # Generate PNG bytes from SVG
+    png_bytes = cairosvg.svg2png(bytestring=svg_string.encode("utf-8"))
+
+    if target == "png":
+        return png_bytes
+
+    if target in ("jpg", "jpeg"):
+        buf = BytesIO(png_bytes)
+        img = Image.open(buf).convert("RGB")
+        out = BytesIO()
+        img.save(out, format="JPEG", quality=90)
+        return out.getvalue()
+
+    raise ValueError(f"Unsupported image format: {fmt}. Supported: svg, png, jpeg")
+
+
+def inject_svg_animations(svg_string: str) -> str:
+    """Inject SMIL animation definitions into an SVG string."""
+    if not svg_string or "<svg" not in svg_string:
+        return svg_string
+
+    rect_animate = (
+        '<animate attributeName="stroke-opacity" values="0.4;1;0.4" '
+        'dur="3s" repeatCount="indefinite"/>'
+    )
+    drop_shadow_filter = (
+        '<filter id="animated-drop-shadow" x="-20%" y="-20%" '
+        'width="140%" height="140%">'
+        '<feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000" '
+        'flood-opacity="0.4">'
+        '<animate attributeName="stdDeviation" values="3;8;3" dur="3s" '
+        'repeatCount="indefinite"/>'
+        '</feDropShadow>'
+        '</filter>'
+    )
+
+    def _inject_rect(match):
+        rect_tag = match.group(1)
+        closing = match.group(2)
+        if closing == "/>":
+            return f"{rect_tag}>{rect_animate}</rect>"
+        return f"{rect_tag}{closing}{rect_animate}"
+
+    svg_string, _ = re.subn(
+        r'(<rect\b[^>]*?)(/?>)',
+        _inject_rect,
+        svg_string,
+        count=1,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    defs_match = re.search(r'(<defs\b.*?</defs>)', svg_string, flags=re.IGNORECASE | re.DOTALL)
+    if defs_match:
+        defs_block = defs_match.group(1)
+        if 'id="animated-drop-shadow"' not in defs_block:
+            updated_defs = re.sub(
+                r'</defs>',
+                f"{drop_shadow_filter}</defs>",
+                defs_block,
+                count=1,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            svg_string = svg_string.replace(defs_block, updated_defs, 1)
+    else:
+        svg_string = re.sub(
+            r'(<svg\b[^>]*?>)',
+            r'\1<defs>' + drop_shadow_filter + '</defs>',
+            svg_string,
+            count=1,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+    if 'id="animated-group"' not in svg_string:
+        group_open = '<g id="animated-group" filter="url(#animated-drop-shadow)">'
+        if re.search(r'<defs\b.*?</defs>', svg_string, flags=re.IGNORECASE | re.DOTALL):
+            svg_string = re.sub(
+                r'(<defs\b.*?</defs>)',
+                r'\1' + group_open,
+                svg_string,
+                count=1,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        else:
+            svg_string = re.sub(
+                r'(<svg\b[^>]*?>)',
+                r'\1' + group_open,
+                svg_string,
+                count=1,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        svg_string = re.sub(r'</svg>', '</g></svg>', svg_string, count=1, flags=re.IGNORECASE)
+
+    return svg_string
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -25,12 +134,13 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Configure CORS middleware
+_settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_methods=["GET", "DELETE"],  # Allow GET for API endpoints and DELETE for cache management
+    allow_origins=_settings.allowed_origins_list(),
+    allow_methods=["GET", "DELETE"],
     allow_headers=["*"],
-    allow_credentials=False,  # Set to True if you need to support credentials
+    allow_credentials=False,
 )
 
 # Implements HTTP conditional requests for CDN-safe SVG caching
@@ -43,7 +153,7 @@ def generate_cached_svg(generator_func, *args, **kwargs):
     return generator_func(*args, **kwargs)
 
 
-def svg_response(svg_content: str, request: Request):
+def svg_response(svg_content: str, request: Request, max_age: int = 14400):
     etag = hashlib.md5(svg_content.encode("utf-8")).hexdigest()
 
     if request.headers.get("if-none-match") == etag:
@@ -53,7 +163,7 @@ def svg_response(svg_content: str, request: Request):
         content=svg_content,
         media_type="image/svg+xml",
         headers={
-            "Cache-Control": "public, max-age=14400, s-maxage=14400",
+            "Cache-Control": f"public, max-age={max_age}, s-maxage={max_age}",
             "ETag": etag,
             "Vary": "Accept-Encoding",
             # Security headers to prevent XSS
@@ -62,6 +172,32 @@ def svg_response(svg_content: str, request: Request):
             "X-Frame-Options": "SAMEORIGIN"
         }
     )
+
+
+def card_response(svg_content: str, format: str, request: Request, max_age: int = 14400, status_code: int = 200):
+    if format.lower() == "svg":
+        response = svg_response(svg_content, request, max_age)
+        response.status_code = status_code
+        return response
+    elif format.lower() in ["png", "jpeg"]:
+        image_bytes = svg_to_image(svg_content, format.upper())
+        media_type = f"image/{format.lower()}"
+        etag = hashlib.md5(image_bytes).hexdigest()
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304)
+        return StreamingResponse(
+            BytesIO(image_bytes),
+            media_type=media_type,
+            status_code=status_code,
+            headers={
+                "Cache-Control": f"public, max-age={max_age}, s-maxage={max_age}",
+                "ETag": etag,
+                "Vary": "Accept-Encoding",
+                "X-Content-Type-Options": "nosniff"
+            }
+        )
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {format}. Supported formats: svg, png, jpeg")
 
 
 def cached_text_response(content: str, request: Request, media_type: str = "text/plain; charset=utf-8"):
@@ -239,37 +375,73 @@ def _authorize_cache_clear(request: Request) -> None:
 def read_root():
     return {"message": "GitCanvas API is running"}
 
-def parse_colors(bg_color, title_color, text_color, border_color):
-    """Helper to construct custom color dict with validation."""
+def parse_custom_overrides(bg_color, title_color, text_color, border_color, font=None):
+    """
+    Helper to construct custom color + font override dict with validation.
+    font param is validated against allowlist to prevent SVG injection.
+    """
     colors = {}
-    
-    # Validate and add colors
+
     if bg_color:
         validated_bg = validate_hex_color(bg_color)
         if validated_bg:
             colors["bg_color"] = validated_bg
-            
+
     if title_color:
         validated_title = validate_hex_color(title_color)
         if validated_title:
             colors["title_color"] = validated_title
-            
+
     if text_color:
         validated_text = validate_hex_color(text_color)
         if validated_text:
             colors["text_color"] = validated_text
-            
+
     if border_color:
         validated_border = validate_hex_color(border_color)
         if validated_border:
             colors["border_color"] = validated_border
-    
+
+    if font:
+        validated_font = validate_font(font)
+        if validated_font:
+            colors["font_family"] = validated_font
+
     return colors if colors else None
+
+
+def parse_heatmap_colors(level_0, level_1, level_2, level_3, level_4):
+    """Helper to construct heatmap intensity colors with validation."""
+    colors = {}
+    for index, value in enumerate([level_0, level_1, level_2, level_3, level_4]):
+        if not value:
+            continue
+        validated = validate_hex_color(value if str(value).startswith("#") else f"#{value}")
+        if validated:
+            colors[f"level_{index}"] = validated
+
+    return colors if colors else None
+
+
+def fetch_github_data_or_error_svg(request: Request, username: str, token: Optional[str] = None, format: str = "svg"):
+    """Fetch GitHub profile data and return an SVG fallback response on API failures."""
+    try:
+        data = github_api.get_live_github_data(username, token, raise_errors=True)
+        return data, None
+    except github_api.UserNotFoundError as exc:
+        svg_content = draw_error_card("user_not_found", username=username, message=exc.message)
+    except github_api.RateLimitExceededError as exc:
+        svg_content = draw_error_card("rate_limited", username=username, message=exc.message)
+    except github_api.GitHubApiError as exc:
+        svg_content = draw_error_card("api_error", username=username, message=exc.message)
+
+    # Keep error card cache shorter than normal cards so transient API issues recover quickly.
+    return None, card_response(svg_content, format, request, max_age=300)
 
 @app.get("/api/stats")
 async def get_stats(
     request: Request,
-    username: str, 
+    username: str,
     theme: str = "Default", 
     hide_stars: bool = False,
     hide_commits: bool = False,
@@ -279,7 +451,10 @@ async def get_stats(
     bg_color: Optional[str] = None,
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
-    border_color: Optional[str] = None
+    border_color: Optional[str] = None,
+    font: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     # Validate inputs
     username = validate_username(username)
@@ -287,24 +462,10 @@ async def get_stats(
     
     # Get optional token from Authorization header for higher rate limits
     token = get_token_from_header(request)
-    
-    data = github_api.get_live_github_data(username, token)
-    
-    # If data fetch failed, return error response
-    if data is None:
-        svg_content = error_svg_response(
-            "Failed to fetch GitHub data. Check username or try again later.",
-            theme
-        )
-        return Response(
-            content=svg_content,
-            media_type="image/svg+xml",
-            status_code=502,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Error": "GitHub API Error"
-            }
-        )
+
+    data, error_response = fetch_github_data_or_error_svg(request, username, token, format)
+    if error_response:
+        return error_response
     
     show_options = {
         "stars": not hide_stars,
@@ -313,9 +474,18 @@ async def get_stats(
         "followers": not hide_followers
     }
     
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
-    svg_content = generate_cached_svg(stats_card.draw_stats_card, data, theme, show_options=show_options, custom_colors=custom_colors, animations_enabled=animations_enabled)
-    return svg_response(svg_content , request)
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
+    svg_content = generate_cached_svg(
+        stats_card.draw_stats_card,
+        data,
+        theme,
+        show_options=show_options,
+        custom_colors=custom_colors,
+        animations_enabled=(animations_enabled or animate),
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/languages")
@@ -328,31 +498,20 @@ async def get_languages(
     bg_color: Optional[str] = None,
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
-    border_color: Optional[str] = None
+    border_color: Optional[str] = None,
+    font: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     # Validate inputs
     username = validate_username(username)
     theme = validate_theme(theme)
     
-    data = github_api.get_live_github_data(username)
-    
-    # If data fetch failed, return error response
-    if data is None:
-        svg_content = error_svg_response(
-            "Failed to fetch GitHub data. Check username or try again later.",
-            theme
-        )
-        return Response(
-            content=svg_content,
-            media_type="image/svg+xml",
-            status_code=502,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Error": "GitHub API Error"
-            }
-        )
-    
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+    token = get_token_from_header(request)
+    data, error_response = fetch_github_data_or_error_svg(request, username, token, format)
+    if error_response:
+        return error_response
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
     
     # Parse exclude parameter into list of languages
     excluded_languages_list = []
@@ -361,8 +520,16 @@ async def get_languages(
     if param_value:
         excluded_languages_list = [lang.strip() for lang in param_value.split(',') if lang.strip()]
     
-    svg_content = generate_cached_svg(lang_card.draw_lang_card, data, theme, custom_colors=custom_colors, excluded_languages=excluded_languages_list)
-    return svg_response(svg_content , request)
+    svg_content = generate_cached_svg(
+        lang_card.draw_lang_card,
+        data,
+        theme,
+        custom_colors=custom_colors,
+        excluded_languages=excluded_languages_list,
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/contributions")
@@ -377,7 +544,10 @@ async def get_contributions(
     text_color: Optional[str] = None,
     border_color: Optional[str] = None,
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    font: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     # Validate inputs
     username = validate_username(username)
@@ -385,25 +555,11 @@ async def get_contributions(
     start_date = validate_date(start_date)
     end_date = validate_date(end_date)
     
-    data = github_api.get_live_github_data(username)
-    
-    # If data fetch failed, return error response
-    if data is None:
-        svg_content = error_svg_response(
-            "Failed to fetch GitHub data. Check username or try again later.",
-            theme
-        )
-        return Response(
-            content=svg_content,
-            media_type="image/svg+xml",
-            status_code=502,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Error": "GitHub API Error"
-            }
-        )
-    
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+    token = get_token_from_header(request)
+    data, error_response = fetch_github_data_or_error_svg(request, username, token, format)
+    if error_response:
+        return error_response
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
     
     # Build date_range dict if dates are provided
     date_range = None
@@ -413,8 +569,75 @@ async def get_contributions(
             'end': end_date
         }
     
-    svg_content = generate_cached_svg(contrib_card.draw_contrib_card, data, theme, custom_colors=custom_colors, date_range=date_range, animations_enabled=animations_enabled)
-    return svg_response(svg_content , request)
+    svg_content = generate_cached_svg(
+        contrib_card.draw_contrib_card,
+        data,
+        theme,
+        custom_colors=custom_colors,
+        date_range=date_range,
+        animations_enabled=(animations_enabled or animate),
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
+
+
+@app.get("/api/calendar-heatmap")
+async def get_calendar_heatmap(
+    request: Request,
+    username: str,
+    theme: str = "Default",
+    period: str = "Last Year",
+    intensity_mode: str = "auto",
+    level_0: Optional[str] = None,
+    level_1: Optional[str] = None,
+    level_2: Optional[str] = None,
+    level_3: Optional[str] = None,
+    level_4: Optional[str] = None,
+    animations_enabled: bool = False,
+    bg_color: Optional[str] = None,
+    title_color: Optional[str] = None,
+    text_color: Optional[str] = None,
+    border_color: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
+):
+    username = validate_username(username)
+    theme = validate_theme(theme)
+    start_date = validate_date(start_date)
+    end_date = validate_date(end_date)
+
+    token = get_token_from_header(request)
+    data, error_response = fetch_github_data_or_error_svg(request, username, token, format)
+    if error_response:
+        return error_response
+
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color)
+    heatmap_colors = parse_heatmap_colors(level_0, level_1, level_2, level_3, level_4)
+
+    date_range = None
+    if start_date and end_date:
+        date_range = {
+            "start": start_date,
+            "end": end_date,
+        }
+
+    svg_content = generate_cached_svg(
+        contrib_card.draw_calendar_heatmap_card,
+        data,
+        theme,
+        custom_colors=custom_colors,
+        date_range=date_range,
+        intensity_mode=intensity_mode,
+        intensity_colors=heatmap_colors,
+        period_label=period,
+        animations_enabled=(animations_enabled or animate),
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/recent")
@@ -425,7 +648,10 @@ async def get_recent(
     bg_color: Optional[str] = None,
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
-    border_color: Optional[str] = None
+    border_color: Optional[str] = None,
+    font: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     # Validate inputs
     username = validate_username(username)
@@ -435,9 +661,16 @@ async def get_recent(
     # This prevents token exposure in logs, browser history, and proxy logs
     token = get_token_from_header(request)
     
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
-    svg_content = recent_activity_card.draw_recent_activity_card({'username': username}, theme, custom_colors=custom_colors, token=token)
-    return svg_response(svg_content, request)
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
+    svg_content = recent_activity_card.draw_recent_activity_card(
+        {'username': username},
+        theme,
+        custom_colors=custom_colors,
+        token=token,
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/trophy")
@@ -448,33 +681,24 @@ async def get_trophy(
     bg_color: Optional[str] = None,
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
-    border_color: Optional[str] = None
+    border_color: Optional[str] = None,
+    font: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     # Validate inputs
     username = validate_username(username)
     theme = validate_theme(theme)
     
-    data = github_api.get_live_github_data(username)
-    
-    # If data fetch failed, return error response
-    if data is None:
-        svg_content = error_svg_response(
-            "Failed to fetch GitHub data. Check username or try again later.",
-            theme
-        )
-        return Response(
-            content=svg_content,
-            media_type="image/svg+xml",
-            status_code=502,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Error": "GitHub API Error"
-            }
-        )
-    
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+    token = get_token_from_header(request)
+    data, error_response = fetch_github_data_or_error_svg(request, username, token, format)
+    if error_response:
+        return error_response
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
     svg_content = trophy_card.draw_trophy_card(data, theme, custom_colors=custom_colors)
-    return svg_response(svg_content, request)
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/streak")
@@ -485,33 +709,24 @@ async def get_streak(
     bg_color: Optional[str] = None,
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
-    border_color: Optional[str] = None
+    border_color: Optional[str] = None,
+    font: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     # Validate inputs
     username = validate_username(username)
     theme = validate_theme(theme)
     
-    data = github_api.get_live_github_data(username)
-    
-    # If data fetch failed, return error response
-    if data is None:
-        svg_content = error_svg_response(
-            "Failed to fetch GitHub data. Check username or try again later.",
-            theme
-        )
-        return Response(
-            content=svg_content,
-            media_type="image/svg+xml",
-            status_code=502,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Error": "GitHub API Error"
-            }
-        )
-    
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+    token = get_token_from_header(request)
+    data, error_response = fetch_github_data_or_error_svg(request, username, token, format)
+    if error_response:
+        return error_response
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
     svg_content = streak_card.draw_streak_card(data, theme, custom_colors=custom_colors)
-    return svg_response(svg_content, request)
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/repos")
@@ -524,7 +739,10 @@ async def get_repos(
     bg_color: Optional[str] = None,
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
-    border_color: Optional[str] = None
+    border_color: Optional[str] = None,
+    font: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     # Validate inputs
     username = validate_username(username)
@@ -532,27 +750,15 @@ async def get_repos(
     sort_by = validate_sort_by(sort_by)
     limit = validate_limit(limit, min_val=1, max_val=10)
     
-    data = github_api.get_live_github_data(username)
-    
-    # If data fetch failed, return error response
-    if data is None:
-        svg_content = error_svg_response(
-            "Failed to fetch GitHub data. Check username or try again later.",
-            theme
-        )
-        return Response(
-            content=svg_content,
-            media_type="image/svg+xml",
-            status_code=502,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Error": "GitHub API Error"
-            }
-        )
-    
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+    token = get_token_from_header(request)
+    data, error_response = fetch_github_data_or_error_svg(request, username, token, format)
+    if error_response:
+        return error_response
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
     svg_content = repo_card.draw_repo_card(data, theme, custom_colors=custom_colors, sort_by=sort_by, limit=limit)
-    return svg_response(svg_content, request)
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/social_card")
@@ -569,10 +775,13 @@ async def get_social_card(
     bg_color: Optional[str] = None,
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
-    border_color: Optional[str] = None
+    border_color: Optional[str] = None,
+    font: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     theme = validate_theme(theme)
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
 
     if icon_color:
         icon_color = validate_hex_color(icon_color)
@@ -607,7 +816,9 @@ async def get_social_card(
         selected_platforms=selected_platforms,
         icon_color=icon_color,
     )
-    return svg_response(svg_content, request)
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/badges")
@@ -722,7 +933,9 @@ async def get_actions(
     bg_color: Optional[str] = None,
     title_color: Optional[str] = None,
     text_color: Optional[str] = None,
-    border_color: Optional[str] = None
+    border_color: Optional[str] = None,
+    animate: bool = False,
+    format: str = "svg",
 ):
     """
     Get GitHub Actions statistics card
@@ -741,17 +954,9 @@ async def get_actions(
             "GitHub Actions requires authentication. Provide token via Authorization header.",
             theme
         )
-        return Response(
-            content=svg_content,
-            media_type="image/svg+xml",
-            status_code=401,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Error": "Missing Authentication Token"
-            }
-        )
+        return card_response(svg_content, format, request, status_code=401)
     
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color)
     
     # Try to get real data with token
     data = github_api.get_github_actions_data(username, token)
@@ -762,18 +967,18 @@ async def get_actions(
             "Failed to fetch GitHub Actions data. Check username or token permissions.",
             theme
         )
-        return Response(
-            content=svg_content,
-            media_type="image/svg+xml",
-            status_code=502,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Error": "GitHub API Error"
-            }
-        )
+        return card_response(svg_content, format, request, status_code=502)
     
-    svg_content = generate_cached_svg(actions_card.draw_actions_card, data, theme, custom_colors=custom_colors)
-    return svg_response(svg_content, request)
+    svg_content = generate_cached_svg(
+        actions_card.draw_actions_card,
+        data,
+        theme,
+        custom_colors=custom_colors,
+        animations_enabled=animate,
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
 
 
 @app.get("/api/commit-analysis")
@@ -801,63 +1006,6 @@ async def get_commit_analysis(
         analysis_data,
         theme,
         custom_colors=custom_colors,
-    )
-    return svg_response(svg_content, request)
-
-
-@app.get("/api/gists")
-async def get_gist_card(
-    request: Request,
-    username: str,
-    gist_id: Optional[str] = None,
-    file_name: Optional[str] = None,
-    style: str = "code",
-    show_description: bool = True,
-    max_lines: int = 8,
-    theme: str = "Default",
-    bg_color: Optional[str] = None,
-    title_color: Optional[str] = None,
-    text_color: Optional[str] = None,
-    border_color: Optional[str] = None
-):
-    """Get gist embed card as SVG."""
-    username = validate_username(username)
-    theme = validate_theme(theme)
-    custom_colors = parse_colors(bg_color, title_color, text_color, border_color)
-    token = get_token_from_header(request)
-
-    style = style if style in {"code", "compact"} else "code"
-    if max_lines < 3:
-        max_lines = 3
-    if max_lines > 12:
-        max_lines = 12
-
-    selected_gist_id = gist_id
-    if not selected_gist_id:
-        gists = github_api.get_user_gists(username, token, limit=1)
-        if not gists:
-            gists = github_api.get_mock_gists(username)
-        if not gists:
-            raise HTTPException(status_code=404, detail="No gists found for this user")
-        selected_gist_id = gists[0].get("id")
-
-    gist_data = github_api.get_gist_file_preview(
-        selected_gist_id,
-        file_name=file_name,
-        token=token,
-        max_lines=max_lines,
-    )
-
-    if not gist_data:
-        gist_data = github_api.get_mock_gist_preview(selected_gist_id, file_name=file_name)
-
-    svg_content = generate_cached_svg(
-        gist_card.draw_gist_card,
-        gist_data,
-        theme,
-        custom_colors=custom_colors,
-        style_variant=style,
-        show_description=show_description,
     )
     return svg_response(svg_content, request)
 

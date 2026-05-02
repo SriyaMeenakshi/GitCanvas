@@ -1,5 +1,6 @@
 import svgwrite
 import requests
+from .svg_base import CSS_ANIMATIONS
 from themes.styles import THEMES
 from utils.api_validators import validate_github_events_response
 import logging
@@ -7,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def draw_recent_activity_card(data, theme_name="Default", custom_colors=None, token=None):
+def draw_recent_activity_card(data, theme_name="Default", custom_colors=None, token=None, animations_enabled=True):
     """
     Fetches the user's GitHub events and renders a simple text-based SVG
     showing the last 3 Pull Request or Issue events.

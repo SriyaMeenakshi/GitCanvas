@@ -59,6 +59,22 @@ def validate_theme(theme: str) -> str:
     # Import here to avoid circular dependency
     from themes.styles import THEMES, CUSTOM_THEMES
     
+    # Backward-compatible aliases for renamed predefined themes.
+    theme_aliases = {
+        "Music 🎼": "Music",
+        "Aesthetic_glass": "Aesthetic Glass",
+        "Aesthetic_neon": "Aesthetic Neon",
+        "Aesthetic_sunset": "Aesthetic Sunset",
+        "Calm_lavender": "Calm Lavender",
+        "Calm_ocean": "Calm Ocean",
+        "Calm_sand": "Calm Sand",
+        "Minimal_dark": "Minimal Dark",
+        "Minimal_light": "Minimal Light",
+        "Minimal_mono": "Minimal Mono",
+        "Aurora_gradient": "Aurora Gradient",
+    }
+    theme = theme_aliases.get(theme, theme)
+
     valid_themes = list(THEMES.keys()) + list(CUSTOM_THEMES.keys())
     
     if theme not in valid_themes:
@@ -197,3 +213,40 @@ def validate_date(date_str: Optional[str]) -> Optional[str]:
         )
     
     return date_str
+
+
+# Allowed safe web-safe + Google Fonts 
+ALLOWED_FONTS = {
+    "rubik", "oswald", "orbitron", "firacode",
+    "dancingscript", "greatvibes", "pacifico",
+    "segoeui", "arial", "verdana", "georgia", "couriernew"
+}
+
+def validate_font(font: Optional[str]) -> Optional[str]:
+    """
+    Validates and sanitizes a font name query param.
+    Only allows known safe font names to prevent SVG injection.
+    Strips spaces, lowercases for comparison, returns original casing.
+
+    Args:
+        font: raw font string from query param e.g. "Inter" or "Fira Code"
+
+    Returns:
+        Sanitized font string or None if invalid/not provided
+    """
+    if not font:
+        return None
+
+    # Strip dangerous characters — only allow letters, digits, spaces
+    import re
+    font = re.sub(r"[^a-zA-Z0-9 ]", "", font).strip()
+
+    if not font:
+        return None
+
+    # Check against allowlist (case-insensitive, spaces stripped)
+    normalized = font.replace(" ", "").lower()
+    if normalized not in ALLOWED_FONTS:
+        return None  # Silently fall back to theme default
+
+    return font

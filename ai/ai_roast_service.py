@@ -13,6 +13,9 @@ try:
 except ImportError:
     genai = None
     _HAS_GENAI = False
+except Exception:
+    genai = None
+    _HAS_GENAI = False
 from openai import OpenAI
 
 from utils.logger import setup_logger

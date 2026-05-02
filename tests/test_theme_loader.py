@@ -8,7 +8,7 @@ import tempfile
 
 class ThemeLoaderTests(unittest.TestCase):
     def test_import_and_load_custom_themes_are_cwd_independent(self):
-        repo_root = Path(__file__).resolve().parent
+        repo_root = Path(__file__).resolve().parent.parent
 
         with tempfile.TemporaryDirectory() as temp_dir:
             env = os.environ.copy()

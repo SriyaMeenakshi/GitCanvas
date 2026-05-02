@@ -1,26 +1,97 @@
 import streamlit as st  # type: ignore
 import base64
+import json
 import os
 import re
-import json
+import requests
+from urllib.parse import quote
 
 # HEX color regex validation pattern
 HEX_COLOR_REGEX = re.compile(r'^#[0-9A-Fa-f]{6}$')
-import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from config.settings import get_settings
 from roast_widget_streamlit import render_roast_widget
-from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card, commit_analysis_card, gist_card
+from compliment_widget_streamlit import render_compliment_widget
+from ai.description_generator import generate_github_description
+from generators import stats_card, lang_card, contrib_card, badge_generator, recent_activity_card, streak_card, repo_card, social_card, trophy_card, sparkline, actions_card
 from utils import github_api
+try:
+    from utils.github_utils import get_rate_limit_status as fetch_rate_limit_status
+except ImportError:
+    def fetch_rate_limit_status(token: str | None = None) -> dict | None:
+        return None
 from utils.cache import clear_cache as clear_ttl_cache
 from utils.theme_state import reset_theme_filter_state
 from themes.styles import THEMES, get_all_themes, CUSTOM_THEMES
-from generators.visual_elements import (
-    emoji_element,
-    gif_element,
-    sticker_element,
-    create_composite_canvas
-)
+from utils.theme_storage import get_storage_backend
+from utils.error_card import draw_error_card
+from generators.visual_elements import emoji_element, gif_element, sticker_element
+try:
+    from generators.svg_base import get_svg_font_style as _shared_get_svg_font_style
+except (ImportError, AttributeError):
+    def _shared_get_svg_font_style(font_family):
+        if not font_family:
+            return ""
+        return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
+
+try:
+    from generators.visual_elements import create_composite_canvas
+except ImportError:
+    def create_composite_canvas(svg_elements: list, bg_color: str = "#0d1117", padding: int = 20) -> str:
+        """Fallback canvas renderer when create_composite_canvas is unavailable."""
+        if not svg_elements:
+            return f"""
+            <svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+                <rect width="600" height="400" fill="{bg_color}"/>
+                <text x="300" y="200" text-anchor="middle" dominant-baseline="middle"
+                      fill="#888" font-size="16px" font-family="Arial">
+                    Your canvas is empty. Add elements to get started!
+                </text>
+            </svg>
+            """
+
+        import math
+
+        cols = math.ceil(math.sqrt(len(svg_elements)))
+        rows = math.ceil(len(svg_elements) / cols)
+        element_width = 140
+        element_height = 140
+        canvas_width = cols * (element_width + padding) + padding
+        canvas_height = rows * (element_height + padding) + padding
+
+        svg_content_list = []
+        for idx, svg_str in enumerate(svg_elements):
+            start = svg_str.find('>') + 1
+            end = svg_str.rfind('</svg>')
+            if start > 0 and end > start:
+                svg_content_list.append((idx, svg_str[start:end]))
+
+        composite = f"""
+        <svg xmlns="http://www.w3.org/2000/svg" width="{canvas_width}" height="{canvas_height}" viewBox="0 0 {canvas_width} {canvas_height}">
+            <rect width="{canvas_width}" height="{canvas_height}" fill="{bg_color}"/>
+            <style>
+                .canvas-border {{ stroke: #30363d; stroke-width: 1; fill: none; }}
+            </style>
+        """
+
+        for idx, content in svg_content_list:
+            col = idx % cols
+            row = idx // cols
+            x = padding + col * (element_width + padding)
+            y = padding + row * (element_height + padding)
+            composite += f"""
+            <g transform="translate({x}, {y})">
+                <rect x="0" y="0" width="{element_width}" height="{element_height}"
+                      class="canvas-border" rx="8"/>
+                <g transform="translate({element_width/2}, {element_height/2}) scale(1)">
+                    {content}
+                </g>
+            </g>
+            """
+
+        return composite + "</svg>"
+from theme_gallery import render_theme_gallery 
+
 
 
 # Load environment variables
@@ -31,6 +102,14 @@ get_settings.cache_clear()
 _settings = get_settings()
 
 st.set_page_config(page_title="GitCanvas Builder", page_icon="🛠️", layout="wide")
+
+# Load persisted custom themes from storage backend on every rerun
+CUSTOM_THEMES.clear()
+_storage = get_storage_backend()
+for _name in _storage.list_themes():
+    _data = _storage.load_theme(_name)
+    if _data:
+        CUSTOM_THEMES[_name] = _data
 
 # Custom CSS for bigger code boxes and cleaner UI
 st.markdown("""
@@ -59,6 +138,19 @@ st.markdown("""
         background: #222;
         border-color: #555;
     }
+
+    /* Keep the long tab row usable on smaller screens */
+    div[data-baseweb="tab-list"] {
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-wrap: nowrap;
+        scrollbar-width: thin;
+    }
+    div[data-baseweb="tab-list"] button {
+        white-space: nowrap;
+        flex: 0 0 auto;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -72,25 +164,133 @@ if "canvas_elements_metadata" not in st.session_state:
     st.session_state["canvas_elements_metadata"] = []
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def get_cached_rate_limit_status(token: str | None) -> dict | None:
+    """Cache rate-limit calls to avoid a network hit on every Streamlit rerun."""
+    return fetch_rate_limit_status(token)
+
 
 # --- Sidebar Controls ---
 with st.sidebar:
     st.header("1. Identify")
-    username = st.text_input("GitHub Username", value="torvalds")
+     # Wrapping in st.form prevents API re-fetch on every keystroke.
+    # Data only loads when user clicks "Load Profile" or presses Enter.
+    with st.form(key="username_form"):
+        username = st.text_input(
+            "GitHub Username",
+            value=st.session_state.get("last_username", "torvalds"),
+            placeholder="e.g. torvalds",
+            help="Press Enter or click Load Profile to fetch data"
+        )
+        submitted = st.form_submit_button(
+            "🔍 Load Profile",
+            use_container_width=True,
+            type="primary"
+        )
+
+    # Only update the active username when form is submitted
+    if submitted:
+        st.session_state["last_username"] = username.strip()
+
+    # Use last confirmed username — avoids mid-typing API calls
+    username = st.session_state.get("last_username", "torvalds").strip()
+    # ── End debounce fix ─────────────────────────────────────────────────
+
     
     st.header("2. Global Style")
     
     # Get all themes including custom ones
     all_themes = get_all_themes()
-    
-    # Separate predefined and custom themes for better organization
+
     predefined_themes = [k for k in all_themes.keys() if k not in CUSTOM_THEMES]
     custom_theme_names = list(CUSTOM_THEMES.keys())
     
     # Combine with custom themes at the end
-    theme_options = predefined_themes + custom_theme_names
+    theme_options = sorted(
+        predefined_themes + custom_theme_names,
+        key=lambda name: name.replace("_", " ").lower(),
+    )
     
-    selected_theme = st.selectbox("Select Theme", theme_options)
+    # ── Custom Font Override (Issue #174) ────────────────────────────────────
+    st.markdown("**Font Override**")
+    FONT_OPTIONS = [
+        "Theme Default",
+        "Rubik", "Oswald", "Orbitron", "Fira Code",
+        "Dancing Script", "Great Vibes", "Pacifico"
+    ]
+    selected_font = st.selectbox(
+        "Card Font",
+        FONT_OPTIONS,
+        help="Small, high-contrast font set with visibly different styles."
+    )
+    # None means use theme default — only pass if user picked something
+    font_override = None if selected_font == "Theme Default" else selected_font
+    # ── End font override ─────────────────────────────────────────────────────
+    st.markdown("**Filter Themes**")
+
+    # Search bar
+    theme_search = st.text_input("🔍 Search themes", placeholder="e.g. dark, gaming...", key="theme_search")
+
+    # Collect all unique tags across themes
+    all_tags = sorted(set(
+        tag
+        for t in all_themes.values()
+        for tag in t.get("tags", [])
+    ))
+
+    # Filter buttons (pills)
+    selected_tags = st.pills("Filter by tag", options=all_tags, selection_mode="multi", key="theme_tags")
+
+    if st.button("Reset Theme Filters", key="reset_theme_filters", use_container_width=True):
+        st.session_state["theme_search"] = ""
+        st.session_state["theme_tags"] = []
+        st.rerun()
+
+    # Apply filters to theme_options
+    def matches_filter(name, props):
+        theme_tags = props.get("tags", [])
+        search_term = (theme_search or "").strip().lower()
+        normalized_name = name.replace("_", " ").lower()
+        search_match = (
+            not search_term
+            or search_term in normalized_name
+            or search_term in name.lower()
+            or any(search_term in t.lower() for t in theme_tags)
+        )
+        
+        if not selected_tags:
+            tag_match = True
+        else:
+            tag_match = any(tag in theme_tags for tag in selected_tags)
+            
+        return search_match and tag_match
+
+    filtered_theme_options = [
+        name for name in theme_options
+        if name in all_themes and matches_filter(name, all_themes[name])
+    ]
+    if not filtered_theme_options:
+        filtered_theme_options = ["Default"]
+
+    # Maintain selection synchronization
+    if "gallery_selected_theme" in st.session_state:
+        target_theme = st.session_state.pop("gallery_selected_theme")
+        if target_theme not in filtered_theme_options:
+            filtered_theme_options.append(target_theme)
+        st.session_state["current_theme_selection"] = target_theme
+
+    try:
+        default_idx = filtered_theme_options.index(st.session_state.get("current_theme_selection", "Default"))
+    except ValueError:
+        default_idx = 0
+
+    selected_theme = st.selectbox(
+        "Select Theme",
+        filtered_theme_options,
+        index=default_idx,
+        key="current_theme_selection",
+        format_func=lambda name: name.replace("_", " "),
+    )
     
     # Customization Expander
     # Ensure custom_colors exists even if the expander isn't opened
@@ -105,10 +305,13 @@ with st.sidebar:
         default_theme = theme_defaults  # Copy already taken above to avoid mutating global
         
         # Helper to get color safely
-        def get_col(key): return default_theme.get(key, "#000000")
+        def get_col(key):
+            val = default_theme.get(key, "000000")
+            return f"#{val}" if not str(val).startswith("#") else val
         
         # Use theme-specific keys so each theme maintains its own customization
-        custom_bg = st.color_picker("Background", value=get_col("bg_color"), key=f"customize_bg_{selected_theme}")
+        def hex_fix(v): return f"#{v}" if not v.startswith("#") else v
+        custom_bg = st.color_picker("Background", value=hex_fix(get_col("bg_color")), key=f"customize_bg_{selected_theme}")
         
         # Validate HEX color format
         if not HEX_COLOR_REGEX.match(custom_bg):
@@ -176,9 +379,12 @@ with st.sidebar:
         
         if st.button("💾 Save Theme", use_container_width=True):
             if theme_name:
-                from themes.styles import save_custom_theme
-                filename = save_custom_theme(theme_name, st.session_state.custom_theme_colors)
-                st.success(f"Theme '{theme_name}' saved! Refresh to see it in the theme list.")
+                from utils.theme_storage import get_storage_backend
+                storage = get_storage_backend()
+                storage.save_theme(theme_name, st.session_state.custom_theme_colors)
+                st.success(f"Theme '{theme_name}' saved!")
+                st.cache_data.clear()
+                st.rerun()
             else:
                 st.error("Please enter a theme name")
 
@@ -187,12 +393,42 @@ with st.sidebar:
         type="password",
         help="Paste a token here, or set GITHUB_TOKEN in a .env file in the project root. Sidebar value overrides .env.",
     )
+
+    # Resolve token once so UI status + data loading stay consistent.
+    _github_from_sidebar = (github_token or "").strip()
+    effective_github_token = _github_from_sidebar or _settings.github_token_value()
+
+    # ==================== RATE LIMIT STATUS INDICATOR ====================
+    st.markdown("**Rate Limit Status**")
+
+    rate_info = get_cached_rate_limit_status(effective_github_token or None)
+
+    if rate_info:
+        col1, col2 = st.columns([0.8, 3.2])
+        with col1:
+            st.markdown(f"{rate_info['color']}", unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"**{rate_info['remaining']} / {rate_info['limit']}** remaining")
+
+        st.caption(f"🔄 Resets in **{rate_info['reset_in']}** minutes")
+
+        if rate_info['remaining'] < 200:
+            st.warning("⚠️ Rate limit is getting low. Consider using a token with higher limits.", icon="⚠️")
+    else:
+        if effective_github_token:
+            st.caption("Rate limit status unavailable right now.")
+        else:
+            st.caption("Using anonymous access → **60 requests/hour**")
+    # =====================================================================
     
     # Animation toggle
     animations_enabled = st.checkbox("Enable Animations", value=False, help="Enable SVG animations for cards that support it")
     
     # Output format selector
     output_format = st.radio("Output Format", ["Markdown", "HTML"], index=0, help="Choose between Markdown or HTML code format")
+    
+    # Dev/Test mock data toggle
+    use_mock_data = st.checkbox("Use Mock Data on API Failure", value=False, help="Dev/Test mode: fallback to mock data if GitHub API hits rate limits or errors.")
     
     if st.button("Refresh Data", use_container_width=True):
         st.cache_data.clear()
@@ -202,20 +438,31 @@ with st.sidebar:
         
     st.info("💡 Tip: Use the 'Icons & Badges' tab to add your tech stack icons!")
 
-# Resolve token for API + caches: sidebar wins, else GITHUB_TOKEN from .env / environment.
-_github_from_sidebar = (github_token or "").strip()
-effective_github_token = _github_from_sidebar or _settings.github_token_value()
-
 # Data Loading
 @st.cache_data(ttl=3600)  # Cache for 1 hour
-def load_data(user, token=None, _cache_version="v3"):  # bump when auth/cache semantics change
+def load_data(user, token=None, use_mock=False, _cache_version="v3"):  # bump when auth/cache semantics change
     d = github_api.get_live_github_data(user, token)
     if not d:
-        st.warning("Using mock data (API limits).")
-        d = github_api.get_mock_data(user)
+        if use_mock:
+            st.warning("API limits/errors reached. Using mock data (Dev/Test mode).")
+            d = github_api.get_mock_data(user)
+        else:
+            return None
     return d
 
-data = load_data(username if username else "torvalds", effective_github_token or None)
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_actions_data(user, token=None, use_mock=False, _cache_version="v1"):
+    d = github_api.get_github_actions_data(user, token)
+    if not d:
+        if use_mock:
+            st.warning("Actions API limits/errors reached. Using mock data (Dev/Test mode).")
+            d = github_api.get_mock_actions_data(user)
+        else:
+            return None
+    return d
+
+data = load_data(username if username else "torvalds", effective_github_token or None, use_mock_data)
 
 # Show token warning only if no token is available from ANY source (env, secrets, sidebar)
 if not effective_github_token:
@@ -226,7 +473,23 @@ if not effective_github_token:
 
 # Ensure data is not None
 if data is None:
-    data = {}
+    if effective_github_token:
+        _err_type = "invalid_user"
+        _err_type_msg = "Username not found — check spelling."
+    else:
+        _err_type = "rate_limit"
+        _err_type_msg = "GitHub API rate limit reached — add a `GITHUB_TOKEN` in the sidebar."
+
+    _err_svg = draw_error_card(_err_type, username=username if username else "user")
+
+    st.error(f"⚠️ **Could not load GitHub data.** {_err_type_msg}")
+    st.markdown(
+        f'<div style="max-width:450px; margin-top:12px;">{_err_svg}</div>',
+        unsafe_allow_html=True
+    )
+    st.info("💡 Add a `GITHUB_TOKEN` in the sidebar to fix rate limit issues.")
+    st.stop()
+
 
 # Ensure backward compatibility with old cached data
 if "top_repos" not in data:
@@ -242,20 +505,55 @@ data.setdefault("created_at", "")
 data.setdefault("top_languages", [])
 data.setdefault("contributions", [])
 
+
+
 # Apply custom colors to current theme for python logic
 current_theme_opts = all_themes.get(selected_theme, all_themes["Default"]).copy()
 if custom_colors:
     current_theme_opts.update(custom_colors)
 
+# Add font override everywhere it is consumed so all renderers see the same font.
+if font_override:
+    current_theme_opts["font_family"] = font_override
+    if custom_colors:
+        custom_colors = {**custom_colors, "font_family": font_override}
+    else:
+        custom_colors = {"font_family": font_override}
 
-# --- Layout: Tabs ---
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14 = st.tabs(["Main Stats", "Languages", "Top Repositories", "Contributions", "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges", "🔥 AI Roast", "Recent Activity", "✨ Visual Elements", "🏆 Trophy", "⚙️ Actions", "🧠 Commit Analysis", "🧩 Gist Embedder"])
+
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
+    "Main Stats", "Languages", "Top Repositories", "Contributions",
+    "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges",
+    "🔥 AI Roast & Summary", "✨ AI Compliment", "Recent Activity", "✨ Visual Elements",
+    "🏆 Trophy", "🎨 Theme Gallery", "📅 Calendar Heatmap",
+    "⚙️ GitHub Actions"
+])
 
 def show_code_area(code_content, label="Markdown Code"):
     st.markdown(f"**{label}** (Copy below)")
     st.text_area(label, value=code_content, height=100, label_visibility="collapsed")
 
-def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown"):
+
+def render_embedded_html(html_content: str, *, height: int) -> None:
+    """Render embedded HTML in an iframe using a data URL.
+
+    Streamlit deprecates st.components.v1.html after 2026-06-01.
+    """
+    data_url = "data:text/html;charset=utf-8," + quote(html_content)
+    st.iframe(data_url, height=height)
+
+def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
+    if font_override:
+        font_style = _shared_get_svg_font_style(font_override)
+        if font_style and "<svg" in svg_bytes:
+            svg_open = svg_bytes.find(">")
+            if svg_open != -1:
+                svg_bytes = (
+                    svg_bytes[: svg_open + 1]
+                    + f"<defs><style type=\"text/css\"><![CDATA[{font_style}]]></style></defs>"
+                    + svg_bytes[svg_open + 1 :]
+                )
+
     col1, col2 = st.columns([1.5, 1])
     with col1:
         # Render SVG
@@ -273,9 +571,9 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
 
         # --- PNG & JPEG Download via browser Canvas (no system dependencies) ---
         svg_b64 = base64.b64encode(svg_bytes.encode("utf-8")).decode("utf-8")
-        filename_prefix_safe = json.dumps(f"{endpoint}_{username}")
+        filename_prefix_safe = f"{endpoint}_{username}"
 
-        components.html(f"""
+        render_embedded_html(f"""
         <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
             <button onclick="downloadSVGAs('png')" style="
                 width:100%; padding:8px; font-size:14px; cursor:pointer;
@@ -317,18 +615,16 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
                 canvas.height = h * SCALE;
                 const ctx = canvas.getContext('2d');
 
-                // Optional: fill white background for JPEG
                 if (format === 'jpeg') {{
                     ctx.fillStyle = '#ffffff';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }}
 
-                // Draw image preserving aspect ratio
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                 canvas.toBlob(function(blob) {{
                     const link = document.createElement('a');
-                    link.download = {filename_prefix_safe} + (format === 'jpeg' ? '.jpeg' : '.png');
+                    link.download = '{filename_prefix_safe}' + (format === 'jpeg' ? '.jpeg' : '.png');
                     link.href = URL.createObjectURL(blob);
                     link.click();
                     URL.revokeObjectURL(url);
@@ -348,10 +644,33 @@ def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hid
                 if not value:
                     params.append(f"hide_{key}=true")
 
+        # Handle theme: for custom themes, extract colors and send as params instead of theme name
+        # This ensures the API receives actual color values for unknown custom themes
         if selected_theme != "Default":
-            params.append(f"theme={selected_theme}")
+            if selected_theme in CUSTOM_THEMES:
+                # Custom theme: send individual color params instead of theme name
+                custom_theme_data = CUSTOM_THEMES[selected_theme]
+                for color_key in ["bg_color", "border_color", "title_color", "text_color", "icon_color"]:
+                    if color_key in custom_theme_data:
+                        color_val = custom_theme_data[color_key]
+                        params.append(f"{color_key}={color_val.replace('#', '')}")
+            else:
+                # Predefined theme: send theme name
+                params.append(f"theme={selected_theme}")
+        
+        # Add custom color overrides from the "Customize Colors" section
         for k, v in custom_colors.items():
             params.append(f"{k}={v.replace('#', '')}")
+
+        if extra_params:
+            for key, value in extra_params.items():
+                if value is None or value == "":
+                    continue
+                if isinstance(value, bool):
+                    if value:
+                        params.append(f"{key}=true")
+                    continue
+                params.append(f"{key}={str(value).replace('#', '')}")
         
         # Add exclude parameter for languages endpoint
         if excluded_languages and endpoint == "languages":
@@ -400,10 +719,30 @@ with tab1:
     show_followers = c4.checkbox("Followers", True)
 
     show_ops = {"stars": show_stars, "commits": show_commits, "repos": show_repos, "followers": show_followers}
+        # Compact layout toggle (Issue #164)
+    compact_layout = st.checkbox("📐 Compact Layout", value=False, help="Slim 300x120 card — fit multiple cards in one README row")
 
-    # Pass selected_theme string to support theme-specific logic (e.g. Glass)
-    svg_bytes = stats_card.draw_stats_card(data, selected_theme, show_ops, custom_colors, animations_enabled)
-    render_tab(svg_bytes, "stats", username, selected_theme, custom_colors, hide_params=show_ops, code_template=f"[![{username}'s Stats]({{url}})](https://github.com/{{username}})", output_format=output_format)
+    # Backward-compatible call: support generators that may not yet accept `compact`
+    try:
+        svg_bytes = stats_card.draw_stats_card(
+            data,
+            selected_theme,
+            show_ops,
+            custom_colors,
+            animations_enabled,
+            compact=compact_layout,
+        )
+    except TypeError as e:
+        if "unexpected keyword argument 'compact'" not in str(e):
+            raise
+        svg_bytes = stats_card.draw_stats_card(
+            data,
+            selected_theme,
+            show_ops,
+            custom_colors,
+            animations_enabled,
+        )
+    render_tab(svg_bytes, "stats", username, selected_theme, custom_colors, hide_params=show_ops, code_template=f"[![{username}'s Stats]({{url}})](https://github.com/{{username}})", output_format=output_format, font_override=font_override)
     
     # Prepare the SVG string from your generator
     # Use real contribution data already loaded (last 30 days) - no extra API call needed
@@ -419,7 +758,7 @@ with tab1:
 
     with spark_col1:
         # We wrap it in a component so the animations and styles actually trigger
-        st.components.v1.html(f"""
+        render_embedded_html(f"""
             <div style="background: {current_theme_opts.get('bg_color', '#0d1117')}; border-radius: 12px; border: 1px solid {current_theme_opts.get('border_color', '#30363d')}; overflow: hidden; position: relative; margin-bottom: 5px;">
                 <!-- Corner Accents -->
                 <div style="position: absolute; top: 0; left: 0; width: 10px; height: 10px; border-top: 2px solid {theme_color}; border-left: 2px solid {theme_color};"></div>
@@ -427,7 +766,7 @@ with tab1:
                 
                 <!-- Header Bar -->
                 <div style="color: {theme_color}; font-family: 'Courier New', monospace; font-size: 10px; font-weight: bold; letter-spacing: 1px; padding: 12px 15px 5px 15px; opacity: 0.8; display: flex; justify-content: space-between; border-bottom: 1px dashed {current_theme_opts.get('border_color', '#30363d')}44;">
-                    <span>SYSTEM_ACTIVITY_MONITOR // {username.upper()}</span>
+                    <span>SYSTEM_ACTIVITY_MONITOR // {data.get('username', username).upper()}</span>
                     <span>STATUS: LIVE_FEED</span>
                 </div>
                 
@@ -446,7 +785,8 @@ with tab1:
         for k, v in custom_colors.items():
             _spark_params.append(f"{k}={v.replace('#', '')}")
         _spark_qs = ("?" + "&".join(_spark_params)) if _spark_params else ""
-        _spark_url = f"https://gitcanvas-api.vercel.app/api/sparkline{_spark_qs}&username={username}"
+        _spark_sep = "&" if _spark_qs else "?"
+        _spark_url = f"https://gitcanvas-api.vercel.app/api/sparkline{_spark_qs}{_spark_sep}username={data.get('username', username)}"
 
         if output_format == "HTML":
             _spark_code = f'<img src="{_spark_url}" alt="30-Day Activity Sparkline"/>'
@@ -476,8 +816,26 @@ with tab2:
     excluded_languages_str = ",".join(excluded_languages) if excluded_languages else None
     
     # Generate card with exclusions - Pass selected_theme string
-    svg_bytes = lang_card.draw_lang_card(data, selected_theme, custom_colors, excluded_languages=excluded_languages)
-    render_tab(svg_bytes, "languages", username, selected_theme, custom_colors, code_template="![Top Langs]({url})", excluded_languages=excluded_languages_str, output_format=output_format)
+    try:
+        svg_bytes = lang_card.draw_lang_card(
+            data,
+            selected_theme,
+            custom_colors,
+            excluded_languages=excluded_languages,
+            animations_enabled=animations_enabled,
+        )
+    except TypeError as e:
+        # Backward compatibility for deployments where lang_card.py does not yet
+        # accept the animations_enabled argument.
+        if "unexpected keyword argument 'animations_enabled'" not in str(e):
+            raise
+        svg_bytes = lang_card.draw_lang_card(
+            data,
+            selected_theme,
+            custom_colors,
+            excluded_languages=excluded_languages,
+        )
+    render_tab(svg_bytes, "languages", username, selected_theme, custom_colors, code_template="![Top Langs]({url})", excluded_languages=excluded_languages_str, output_format=output_format, font_override=font_override)
 
 with tab3:
     st.subheader("Top Repositories")
@@ -497,9 +855,9 @@ with tab3:
     if exclude_forks and "top_repos" in filtered_data:
         filtered_data["top_repos"] = [r for r in filtered_data["top_repos"] if not r.get("is_fork", False)]
     
-    # Generate card - Pass selected_theme string
-    svg_bytes = repo_card.draw_repo_card(filtered_data, selected_theme, custom_colors, sort_by=sort_by, limit=repo_limit)
-    render_tab(svg_bytes, "repos", username, selected_theme, custom_colors, code_template="![Top Repos]({url})", output_format=output_format)
+    compact_repo = st.checkbox("📐 Compact Layout", value=False, help="Slim 300px card — fit multiple cards in one README row", key="compact_repo")
+    svg_bytes = repo_card.draw_repo_card(filtered_data, selected_theme, custom_colors, sort_by=sort_by, limit=repo_limit, compact=compact_repo, animations_enabled=animations_enabled)
+    render_tab(svg_bytes, "repos", username, selected_theme, custom_colors, code_template="![Top Repos]({url})", output_format=output_format, font_override=font_override)
 
 with tab4:
     st.subheader("Contribution Graph")
@@ -548,14 +906,14 @@ with tab4:
 
     # Pass selected_theme string and date_range
     svg_bytes = contrib_card.draw_contrib_card(data, selected_theme, custom_colors, date_range=date_range, animations_enabled=animations_enabled)
-    render_tab(svg_bytes, "contributions", username, selected_theme, custom_colors, code_template="![Contributions]({url})", output_format=output_format)
+    render_tab(svg_bytes, "contributions", username, selected_theme, custom_colors, code_template="![Contributions]({url})", output_format=output_format, font_override=font_override)
 
 with tab5:
     st.subheader("GitHub Streak")
     st.caption("🔥 Track your contribution streaks! Shows current consecutive days and your all-time longest streak.")
     
-    svg_bytes = streak_card.draw_streak_card(data, selected_theme, custom_colors)
-    render_tab(svg_bytes, "streak", username, selected_theme, custom_colors, code_template="![GitHub Streak]({url})", output_format=output_format)
+    svg_bytes = streak_card.draw_streak_card(data, selected_theme, custom_colors, animations_enabled=animations_enabled)
+    render_tab(svg_bytes, "streak", username, selected_theme, custom_colors, code_template="![GitHub Streak]({url})", output_format=output_format, font_override=font_override)
 
 with tab6:
     st.subheader("🔗 Social Links")
@@ -595,7 +953,8 @@ with tab6:
                     social_data,
                     selected_theme,
                     custom_colors,
-                    selected_platforms
+                    selected_platforms,
+                    animations_enabled=animations_enabled
                 )
                 b64 = base64.b64encode(svg_bytes.encode('utf-8')).decode("utf-8")
                 st.markdown(f'<img src="data:image/svg+xml;base64,{b64}" style="max-width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-radius: 10px;"/>', unsafe_allow_html=True)
@@ -675,7 +1034,7 @@ with tab7:
             st.markdown("---")
             show_code_area(md_output, label="Badge Code")
 
-# AI ROAST TAB
+# AI ROAST & SUMMARY TAB
 with tab8:
     st.subheader("🔥 AI Profile Roast")
 
@@ -688,11 +1047,77 @@ with tab8:
     st.markdown("Let AI roast your GitHub profile with humor!")
     
     if username:
-        render_roast_widget(username)
+        render_roast_widget(username, profile_data=data)
+    else:
+        st.warning("Please enter a GitHub username in the sidebar.")
+    
+    st.markdown("---")
+    st.subheader("🧠 AI Description Summary")
+    st.caption("Generate a short, theme-aware summary of this GitHub profile.")
+
+    tone_col, button_col = st.columns([1.2, 1])
+    with tone_col:
+        description_tone = st.selectbox(
+            "Tone",
+            ["professional", "funny", "creative"],
+            index=0,
+            key="ai_description_tone",
+        )
+
+    with button_col:
+        if st.button("Generate AI Description", type="primary", use_container_width=True, key="generate_ai_description"):
+            with st.spinner("Generating AI description..."):
+                result = generate_github_description(data, selected_theme, tone=description_tone)
+                st.session_state["ai_description_result"] = {
+                    **result,
+                    "username": username,
+                    "theme": selected_theme,
+                    "tone": description_tone,
+                }
+
+    current_description = st.session_state.get("ai_description_result")
+    if (
+        current_description
+        and current_description.get("username") == username
+        and current_description.get("theme") == selected_theme
+        and current_description.get("tone") == description_tone
+    ):
+        description_text = current_description.get("description", "")
+        st.markdown("**Generated Description**")
+        st.write(description_text)
+
+        source = current_description.get("source", "fallback")
+        st.caption(f"Source: {source} • Tone: {description_tone} • Theme: {selected_theme}")
+
+        st.download_button(
+            label="💾 Save Description",
+            data=description_text,
+            file_name=f"{username}_{selected_theme}_description.txt",
+            mime="text/plain",
+            use_container_width=False,
+            key="save_ai_description",
+        )
+    else:
+        st.info("Click **Generate AI Description** to create a summary for the current theme.")
+
+# AI COMPLIMENT TAB
+with tab9:
+    st.subheader("✨ AI Profile Compliment")
+
+    if not _settings.has_any_llm_key:
+        st.warning(
+            "No **OPENAI_API_KEY** or **GEMINI_API_KEY** in the environment: the AI Compliment tab uses "
+            "built-in fallback lines only until you add a provider key."
+        )
+
+    st.markdown("Let AI celebrate and compliment your GitHub profile!")
+    
+    if username:
+        render_compliment_widget(username, profile_data=data)
     else:
         st.warning("Please enter a GitHub username in the sidebar.")
 
-with tab9:
+with tab10:
     st.subheader("Recent Activity")
     st.markdown("Shows your last 3 PR or Issue events from GitHub.")
 
@@ -702,7 +1127,7 @@ with tab9:
         try:
             # Pass selected_theme string
             svg_bytes = recent_activity_card.draw_recent_activity_card(
-                {"username": username}, selected_theme, custom_colors, token=effective_github_token
+                {"username": username}, selected_theme, custom_colors, token=effective_github_token, animations_enabled=animations_enabled
             )
         except requests.RequestException as e:
             st.error(f"Network error fetching recent activity: {type(e).__name__}. Check your connection and try again.")
@@ -740,7 +1165,7 @@ with tab9:
         code_label = "HTML Code" if output_format == "HTML" else "Markdown Code"
         show_code_area(code, label=code_label)
 
-with tab10:
+with tab11:
     st.subheader("✨ Visual Elements")
     st.markdown("Add emojis, GIFs, or stickers to your canvas")
 
@@ -820,7 +1245,7 @@ with tab10:
             svg_b64 = base64.b64encode(canvas_svg.encode("utf-8")).decode("utf-8")
             filename_prefix_safe = json.dumps(f"canvas_{username}")
             
-            st.components.v1.html(f"""
+            render_embedded_html(f"""
             <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
                 <button onclick="downloadCanvasAs('png')" style="
                     width:100%; padding:8px; font-size:12px; cursor:pointer;
@@ -921,8 +1346,8 @@ with tab10:
     else:
         st.info("👆 Add elements to your canvas to get started. You can mix emojis, GIFs, and stickers!")
 
-# TAB 11: Trophy Card
-with tab11:
+# TAB 12: Trophy Card
+with tab12:
     st.subheader("🏆 GitHub Trophy")
     st.markdown("Display your achievements including stars, forks, followers, and repository quality tier!")
     
@@ -933,132 +1358,170 @@ with tab11:
         # Add a default for testing
         trophy_data["created_at"] = "2010-01-01T00:00:00Z"
     
-    svg_bytes = trophy_card.draw_trophy_card(trophy_data, selected_theme, custom_colors)
-    render_tab(svg_bytes, "trophy", username, selected_theme, custom_colors, code_template="![GitHub Trophy]({url})", output_format=output_format)
+    svg_bytes = trophy_card.draw_trophy_card(trophy_data, selected_theme, custom_colors, animations_enabled=animations_enabled)
+    render_tab(svg_bytes, "trophy", username, selected_theme, custom_colors, code_template="![GitHub Trophy]({url})", output_format=output_format, font_override=font_override)
 
-with tab12:
-    st.subheader("⚙️ GitHub Actions Stats")
-    st.markdown("Display your GitHub Actions workflows, success rates, and recent activity.")
-    
-    # Load Actions data
-    @st.cache_data(ttl=3600)
-    def load_actions_data(user, token=None, _cache_version="v1"):
-        d = github_api.get_github_actions_data(user, token)
-        if not d:
-            st.info("Using mock Actions data for demonstration (requires GitHub token for real data).")
-            d = github_api.get_mock_actions_data(user)
-        return d
-    
-    actions_data = load_actions_data(username if username else "torvalds", effective_github_token or None)
-    
-    if actions_data:
-        svg_bytes = actions_card.draw_actions_card(actions_data, selected_theme, custom_colors, animations_enabled)
-        render_tab(svg_bytes, "actions", username, selected_theme, custom_colors, code_template="![GitHub Actions Stats]({url})", output_format=output_format)
-    else:
-        st.error("Failed to load GitHub Actions data. Please ensure you have a valid GitHub token with Actions access.")
-
+    # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
 with tab13:
-    st.subheader("🧠 Commit Message Analysis")
-    st.markdown("Analyze your commit tone, common words, and message style patterns.")
+    chosen_theme = render_theme_gallery(all_themes, selected_theme, font_override=font_override)
+    if chosen_theme:
+        st.session_state["gallery_selected_theme"] = chosen_theme
+        st.rerun()
 
-    @st.cache_data(ttl=3600)
-    def load_commit_analysis_data(user, token=None, _cache_version="v1"):
-        return github_api.get_commit_history(user, token)
+with tab14:
+    st.subheader("📅 Yearly Calendar Heatmap")
+    st.caption("A 53-week contribution heatmap with selectable intensity mapping and custom colors.")
 
-    commit_analysis_data = load_commit_analysis_data(username if username else "torvalds", effective_github_token or None)
-    commit_analysis_data["username"] = username if username else "torvalds"
+    def _heatmap_theme_palette(theme_name: str, theme: dict) -> list[str]:
+        return contrib_card._palette_from_theme(theme_name, theme)
 
-    svg_bytes = commit_analysis_card.draw_commit_analysis_card(
-        commit_analysis_data,
+    from datetime import datetime, timedelta, timezone
+    today = datetime.now(timezone.utc).date()
+
+    control_col1, control_col2 = st.columns(2)
+    with control_col1:
+        intensity_mode = st.selectbox(
+            "Intensity mode",
+            ["auto", "none", "low", "medium", "high"],
+            index=0,
+            key="heatmap_intensity_mode",
+        )
+    with control_col2:
+        period = st.selectbox(
+            "Period",
+            ["Last Year", "Current Year", "Custom Range"],
+            index=0,
+            key="heatmap_period",
+        )
+
+    heatmap_default_colors = _heatmap_theme_palette(selected_theme, current_theme_opts)
+    heatmap_color_cols = st.columns(5)
+    heatmap_colors = {}
+    for index, column in enumerate(heatmap_color_cols):
+        label = ["None", "Low", "Medium", "High", "Max"][index]
+        session_key = f"heatmap_level_{selected_theme}_{index}"
+        with column:
+            heatmap_colors[f"level_{index}"] = st.color_picker(
+                f"Level {index} ({label})",
+                value=heatmap_default_colors[index],
+                key=session_key,
+            )
+
+    heatmap_date_range = None
+    if period == "Current Year":
+        heatmap_date_range = {
+            "start": datetime(today.year, 1, 1).date().strftime("%Y-%m-%d"),
+            "end": today.strftime("%Y-%m-%d"),
+        }
+    elif period == "Custom Range":
+        start_col, end_col = st.columns(2)
+        with start_col:
+            custom_start = st.date_input("Start Date", value=today - timedelta(days=180), key="heatmap_custom_start")
+        with end_col:
+            custom_end = st.date_input("End Date", value=today, key="heatmap_custom_end")
+        heatmap_date_range = {
+            "start": custom_start.strftime("%Y-%m-%d"),
+            "end": custom_end.strftime("%Y-%m-%d"),
+        }
+    else:
+        heatmap_date_range = {
+            "start": (today - timedelta(days=365)).strftime("%Y-%m-%d"),
+            "end": today.strftime("%Y-%m-%d"),
+        }
+
+    svg_bytes = contrib_card.draw_calendar_heatmap_card(
+        data,
         selected_theme,
-        custom_colors
+        custom_colors,
+        date_range=heatmap_date_range,
+        intensity_mode=intensity_mode,
+        intensity_colors=heatmap_colors,
+        period_label=period,
+        animations_enabled=animations_enabled,
     )
+
     render_tab(
         svg_bytes,
-        "commit-analysis",
+        "calendar-heatmap",
         username,
         selected_theme,
         custom_colors,
-        code_template="![Commit Message Analysis]({url})",
-        output_format=output_format
+        code_template="![Calendar Heatmap]({url})",
+        output_format=output_format,
+        extra_params={
+            "period": period,
+            "intensity_mode": intensity_mode,
+            **heatmap_colors,
+            "start_date": heatmap_date_range["start"],
+            "end_date": heatmap_date_range["end"],
+        },
     )
 
-with tab14:
-    st.subheader("🧩 Gist Embedder")
-    st.markdown("Embed your GitHub Gists as stylish cards in your profile README.")
+with tab15:
+    st.subheader("⚙️ GitHub Actions")
+    st.caption("Workflow run totals, success rate, and recent runs from GitHub Actions.")
 
-    @st.cache_data(ttl=3600)
-    def load_user_gists_data(user, token=None, _cache_version="v1"):
-        gists = github_api.get_user_gists(user, token, limit=20)
-        if not gists:
-            st.info("Using mock gist data for demonstration (API unavailable or no public gists).")
-            gists = github_api.get_mock_gists(user)
-        return gists
+    if not effective_github_token:
+        st.warning(
+            "A GitHub token is required for live Actions data. Enable mock data for a local preview, or add a token in the sidebar."
+        )
 
-    @st.cache_data(ttl=1800)
-    def load_gist_preview(gist_id, file_name=None, token=None, max_lines=8, _cache_version="v1"):
-        preview = github_api.get_gist_file_preview(gist_id, file_name=file_name, token=token, max_lines=max_lines)
-        if not preview:
-            preview = github_api.get_mock_gist_preview(gist_id, file_name=file_name)
-        return preview
+    actions_data = load_actions_data(username if username else "torvalds", effective_github_token or None, use_mock_data)
 
-    gists = load_user_gists_data(username if username else "torvalds", effective_github_token or None)
+    if actions_data:
+        col1, col2 = st.columns([1.5, 1])
 
-    if not gists:
-        st.warning("No gists found for this user.")
+        with col1:
+            svg_bytes = actions_card.draw_actions_card(actions_data, selected_theme, custom_colors, animations_enabled=animations_enabled)
+            b64 = base64.b64encode(svg_bytes.encode("utf-8")).decode("utf-8")
+            st.markdown(
+                f'<img src="data:image/svg+xml;base64,{b64}" style="max-width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-radius: 10px;"/>',
+                unsafe_allow_html=True,
+            )
+
+        with col2:
+            st.subheader("API Usage")
+            st.caption("This endpoint requires an Authorization header, so it cannot be embedded as a normal public README image URL.")
+            example_url = f"https://gitcanvas-api.vercel.app/api/actions?username={username}&theme={selected_theme}"
+            curl_example = (
+                "curl -H \"Authorization: Bearer YOUR_GITHUB_TOKEN\" "
+                f'"{example_url}"'
+            )
+            show_code_area(curl_example, label="Curl Example")
+
+            st.divider()
+            st.subheader("🤖 Automation")
+            st.caption("Use GitHub Actions to automatically update this card in your README every day.")
+            
+            if st.button("Generate Workflow YAML"):
+                workflow_yaml = f"""name: Update GitCanvas Actions Stats
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every day at midnight
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Fetch GitCanvas SVG
+        run: |
+          curl -H "Authorization: Bearer ${{{{ secrets.GITCANVAS_TOKEN }}}}" \\
+          "https://gitcanvas-api.vercel.app/api/actions?username={username}&theme={selected_theme}" \\
+          -o github-actions-stats.svg
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add github-actions-stats.svg
+          git commit -m "Update GitHub Actions stats [skip ci]" || echo "No changes to commit"
+          git push
+"""
+                st.code(workflow_yaml, language="yaml")
+                st.info("💡 **Setup Instructions:**\n1. Create `.github/workflows/gitcanvas.yml` in your repo.\n2. Paste the code above.\n3. Add a secret named `GITCANVAS_TOKEN` in your repo settings with a Classic Personal Access Token (repo scope).")
     else:
-        gist_options = []
-        gist_lookup = {}
-        for gist in gists:
-            gist_id = gist.get("id", "")
-            desc = gist.get("description", "Untitled Gist")
-            option_label = f"{desc[:60]} ({gist_id[:8]})"
-            gist_options.append(option_label)
-            gist_lookup[option_label] = gist
-
-        selected_gist_label = st.selectbox("Choose a Gist", gist_options)
-        selected_gist = gist_lookup[selected_gist_label]
-
-        selected_gist_id = selected_gist.get("id", "")
-        files = selected_gist.get("files", [])
-        file_names = [f.get("filename", "") for f in files if f.get("filename")]
-        selected_file = st.selectbox("Select File", file_names if file_names else [""], index=0)
-
-        c1, c2, c3 = st.columns(3)
-        style_variant = c1.selectbox("Card Style", ["code", "compact"], index=0)
-        show_description = c2.checkbox("Show Description", value=True)
-        max_lines = c3.slider("Preview Lines", min_value=3, max_value=12, value=8)
-
-        gist_preview_data = load_gist_preview(
-            selected_gist_id,
-            file_name=selected_file,
-            token=effective_github_token or None,
-            max_lines=max_lines,
-        )
-
-        svg_bytes = gist_card.draw_gist_card(
-            gist_preview_data,
-            selected_theme,
-            custom_colors,
-            style_variant=style_variant,
-            show_description=show_description,
-        )
-
-        render_tab(
-            svg_bytes,
-            "gists",
-            username,
-            selected_theme,
-            custom_colors,
-            code_template=(
-                "![Gist Card]({url}&gist_id="
-                + selected_gist_id
-                + "&file_name="
-                + selected_file
-                + "&style="
-                + style_variant
-                + ("&show_description=true" if show_description else "&show_description=false")
-                + f"&max_lines={max_lines})"
-            ),
-            output_format=output_format,
-        )
+        st.warning("No GitHub Actions data could be loaded for this account.")
