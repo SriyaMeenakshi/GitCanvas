@@ -1371,7 +1371,6 @@ with tab13:
 
     # ── NEW: Theme Gallery Tab (Issue #162) ──────────────────────────────────
 with tab14:
-    chosen_theme = render_theme_gallery(all_themes, selected_theme)
     chosen_theme = render_theme_gallery(all_themes, selected_theme, font_override=font_override)
     if chosen_theme:
         st.session_state["gallery_selected_theme"] = chosen_theme
