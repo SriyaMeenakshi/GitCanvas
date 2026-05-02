@@ -10,7 +10,11 @@ import cairosvg
 from PIL import Image
 import re
 from config.settings import get_settings
-from generators import stats_card, lang_card, contrib_card, recent_activity_card, trophy_card, streak_card, repo_card, social_card, badge_generator, actions_card, commit_analysis_card
+from generators import (
+    stats_card, lang_card, contrib_card, recent_activity_card, 
+    trophy_card, streak_card, repo_card, social_card, 
+    badge_generator, actions_card, achievement_card, commit_analysis_card
+)
 from utils import github_api
 from utils.error_card import draw_error_card
 from utils.cache import cache_svg_response, get_cache_stats, clear_cache
@@ -701,6 +705,31 @@ async def get_trophy(
     return card_response(svg_content, format, request)
 
 
+@app.get("/api/achievements")
+async def get_achievements(
+    request: Request,
+    username: str,
+    theme: str = "Default",
+    bg_color: Optional[str] = None,
+    title_color: Optional[str] = None,
+    text_color: Optional[str] = None,
+    border_color: Optional[str] = None,
+    font: Optional[str] = None,
+    animations_enabled: bool = True,
+):
+    # Validate inputs
+    username = validate_username(username)
+    theme = validate_theme(theme)
+    
+    token = get_token_from_header(request)
+    data, error_response = fetch_github_data_or_error_svg(request, username, token)
+    if error_response:
+        return error_response
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color, font)
+    svg_content = generate_cached_svg(achievement_card.draw_achievement_card, data, theme, custom_colors=custom_colors, animations_enabled=animations_enabled)
+    return svg_response(svg_content, request)
+
+
 @app.get("/api/streak")
 async def get_streak(
     request: Request,
@@ -971,6 +1000,41 @@ async def get_actions(
     
     svg_content = generate_cached_svg(
         actions_card.draw_actions_card,
+        data,
+        theme,
+        custom_colors=custom_colors,
+        animations_enabled=animate,
+    )
+    if animate:
+        svg_content = inject_svg_animations(svg_content)
+    return card_response(svg_content, format, request)
+
+@app.get("/api/achievements")
+async def get_achievements(
+    request: Request,
+    username: str,
+    theme: str = "Default",
+    bg_color: Optional[str] = None,
+    title_color: Optional[str] = None,
+    text_color: Optional[str] = None,
+    border_color: Optional[str] = None,
+    animate: bool = True,
+    format: str = "svg",
+):
+    """Get achievement room card as SVG."""
+    # Validate inputs
+    username = validate_username(username)
+    theme = validate_theme(theme)
+    
+    token = get_token_from_header(request)
+    data, error_response = fetch_github_data_or_error_svg(request, username, token, format)
+    if error_response:
+        return error_response
+        
+    custom_colors = parse_custom_overrides(bg_color, title_color, text_color, border_color)
+    
+    svg_content = generate_cached_svg(
+        achievement_card.draw_achievement_card,
         data,
         theme,
         custom_colors=custom_colors,

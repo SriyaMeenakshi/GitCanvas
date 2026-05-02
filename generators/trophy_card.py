@@ -1,6 +1,7 @@
 import svgwrite
 from themes.styles import THEMES
 from .svg_base import create_svg_base
+from utils.achievements import calculate_achievements
 
 
 def draw_trophy_card(data, theme_name="Default", custom_colors=None, animations_enabled=True):
@@ -8,7 +9,7 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None, animations_
     Generates the GitHub Trophy Card SVG showing achievements.
     """
     width = 450
-    height = 240  # Increased for breathing room and to prevent bottom overlap
+    height = 300  # Increased to accommodate the 3rd row of stats
     
     # Calculate total forks from all repositories
     total_forks = data.get("total_forks")
@@ -149,11 +150,14 @@ def draw_trophy_card(data, theme_name="Default", custom_colors=None, animations_
          "icon": "M8,10 A4,4 0 1,1 16,10 A4,4 0 1,1 8,10 M4,20 Q12,14 20,20 V22 H4 Z"},
          
         {"label": "Experience", "value": f"{years_contributing} Yr{'s' if years_contributing != 1 else ''}", 
-         "icon": "M4,6 H20 V20 H4 Z M4,10 H20 M8,4 V8 M16,4 V8 M8,14 H10 V16 H8 Z M14,14 H16 V16 H14 Z"}
+         "icon": "M4,6 H20 V20 H4 Z M4,10 H20 M8,4 V8 M16,4 V8 M8,14 H10 V16 H8 Z M14,14 H16 V16 H14 Z"},
+         
+        {"label": "Achievements", "value": f"{len([a for a in calculate_achievements(data) if a['unlocked']])}/6", 
+         "icon": "M12,15 L17,21 H7 L12,15 M12,2 L15,8 L22,9 L17,14 L18,21 L12,18 L6,21 L7,14 L2,9 L9,8 Z"}
     ]
 
     grid_x = [135, 290]
-    grid_y = [75, 145]
+    grid_y = [75, 145, 215]
     card_width = 145
     card_height = 55
     
