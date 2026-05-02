@@ -55,8 +55,10 @@ desktop.ini
 
 # Logs
 *.log
+*.svg
+.pytest_cache/
 
 .env
 .env.text
-.env.example
-.env.* 
+.env.*
+!.env.example

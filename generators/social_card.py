@@ -1,5 +1,6 @@
 import svgwrite
 from themes.styles import THEMES
+from .svg_base import CSS_ANIMATIONS
 
 # Social platform configurations with shields.io logo names
 SOCIAL_PLATFORMS = {
@@ -43,7 +44,7 @@ def generate_social_badge_url(platform, label, color, logo, style="for-the-badge
     safe_color = color.replace("#", "")
     return f"https://img.shields.io/badge/{safe_label}-{safe_color}?style={style}&logo={logo}&logoColor={logo_color}"
 
-def draw_social_card(social_data, theme_name="Default", custom_colors=None, selected_platforms=None, icon_color=None):
+def draw_social_card(social_data, theme_name="Default", custom_colors=None, selected_platforms=None, icon_color=None, animations_enabled=True):
     """
     Generates the Social Links Card SVG.
     
@@ -105,6 +106,8 @@ def draw_social_card(social_data, theme_name="Default", custom_colors=None, sele
     
     # Create SVG
     dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {width} {height}")
+    if animations_enabled:
+        dwg.defs.add(dwg.style(CSS_ANIMATIONS))
     
     # Background
     dwg.add(dwg.rect(

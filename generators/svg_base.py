@@ -2,23 +2,33 @@ import svgwrite
 from themes.styles import THEMES
 
 
-def get_theme_color(theme: dict, key: str, fallback: str) -> str:
-    """
-    Safely retrieve a color value from a theme dictionary.
-    
-    Eliminates the need for verbose double-default patterns like:
-        theme.get("color_key", "#default") or "#default"
-    
-    Args:
-        theme: Theme dictionary from THEMES
-        key: Color key to retrieve (e.g., "success_color", "border_color")
-        fallback: Default color value if key is missing or None
-        
-    Returns:
-        Color string (hex or named color)
-    """
-    return theme.get(key) or fallback
+_FONT_FACE_MAP = {
+    "rubik": ("Rubik", "Rubik:wght@400;500;600;700;800", "'Rubik', sans-serif"),
+    "oswald": ("Oswald", "Oswald:wght@400;500;600;700", "'Oswald', sans-serif"),
+    "orbitron": ("Orbitron", "Orbitron:wght@400;500;600;700;800;900", "'Orbitron', sans-serif"),
+    "firacode": ("Fira Code", "Fira+Code:wght@400;500;600;700", "'Fira Code', monospace"),
+    "dancingscript": ("Dancing Script", "Dancing+Script:wght@400;500;600;700", "'Dancing Script', cursive"),
+    "greatvibes": ("Great Vibes", "Great+Vibes", "'Great Vibes', cursive"),
+    "pacifico": ("Pacifico", "Pacifico", "'Pacifico', cursive"),
+}
 
+
+def get_svg_font_style(font_family):
+    """Return SVG CSS that loads and applies a selected font family."""
+    if not font_family:
+        return ""
+
+    normalized = str(font_family).replace("'", "").replace('"', "").split(",")[0].strip().lower().replace(" ", "")
+    font_info = _FONT_FACE_MAP.get(normalized)
+
+    if font_info:
+        _display_name, query_name, css_stack = font_info
+        return (
+            f"@import url('https://fonts.googleapis.com/css2?family={query_name}&display=swap');\n"
+            f"text, tspan, .svg-font {{ font-family: {css_stack} !important; }}"
+        )
+
+    return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
 
 # CSS Animation Definitions - Reusable across all card generators
 CSS_ANIMATIONS = """
@@ -154,6 +164,10 @@ CSS_ANIMATIONS = """
     .anim-bubble {
         animation: bubbleFloat 3s ease-in-out infinite;
     }
+    
+    .anim-progress-fill {
+        animation: progressFill 1s ease-out forwards;
+    }
 """
 
 
@@ -191,10 +205,15 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
     if custom_colors:
         theme.update(custom_colors)
     
-    dwg = svgwrite.Drawing(size=(f"{width}px", f"{height}px"))
+    dwg = svgwrite.Drawing(size=("100%", "100%"), viewBox=f"0 0 {width} {height}")
     
-    # Note: CSS animations disabled due to svgwrite validation constraints
-    
+    # Inject CSS animations
+    if animations_enabled:
+        dwg.defs.add(dwg.style(CSS_ANIMATIONS))
+
+    font_style = get_svg_font_style(theme.get("font_family"))
+    if font_style:
+        dwg.defs.add(dwg.style(font_style))
     # Background with optional border pulse animation
     bg_params = {
         "insert": (0, 0), 
@@ -206,11 +225,6 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
         "stroke_width": 2
     }
     
-    if animations_enabled:
-        dwg.add(dwg.rect(**bg_params))
-    else:
-        dwg.add(dwg.rect(**bg_params))
-    
     # Title with animation
     title_params = {
         "insert": (20, 30),
@@ -221,8 +235,111 @@ def create_svg_base(theme_name, custom_colors, width, height, title_text, animat
     }
     
     if animations_enabled:
-        dwg.add(dwg.text(title_text, **title_params))
-    else:
-        dwg.add(dwg.text(title_text, **title_params))
+        bg_params["class_"] = "anim-fade-in"
+        title_params["class_"] = "anim-slide-up"
+        
+    dwg.add(dwg.rect(**bg_params))
+    dwg.add(dwg.text(title_text, **title_params))
     
     return dwg, theme
+
+def draw_card_background(dwg, width, height, theme, rx=10, ry=10,
+                         stroke_width=2, opacity=1.0):
+    """
+    Draws a standard rounded-rect card background with theme border.
+    Replaces repeated dwg.rect(insert=(0,0)...) pattern in all generators.
+
+    Args:
+        dwg: svgwrite Drawing object
+        width: card width (int or "100%")
+        height: card height (int or "100%")
+        theme: theme dict with bg_color and border_color
+        rx: horizontal border radius (default 10)
+        ry: vertical border radius (default 10)
+        stroke_width: border thickness (default 2)
+        opacity: background opacity (default 1.0)
+    """
+    size = (f"{width}px", f"{height}px") if isinstance(width, int) else ("100%", "100%")
+    dwg.add(dwg.rect(
+        insert=(0, 0),
+        size=size,
+        rx=rx, ry=ry,
+        fill=theme.get("bg_color", "#0d1117"),
+        stroke=theme.get("border_color", "#30363d"),
+        stroke_width=stroke_width,
+        opacity=opacity
+    ))
+
+
+def draw_divider_line(dwg, x1, y1, x2, y2, theme,
+                      stroke_width=1, opacity=0.3):
+    """
+    Draws a horizontal or vertical separator line using theme border color.
+    Replaces repeated dwg.line(stroke=border_color...) pattern.
+
+    Args:
+        dwg: svgwrite Drawing object
+        x1, y1: start coordinates
+        x2, y2: end coordinates
+        theme: theme dict with border_color
+        stroke_width: line thickness (default 1)
+        opacity: line opacity (default 0.3)
+    """
+    dwg.add(dwg.line(
+        start=(x1, y1),
+        end=(x2, y2),
+        stroke=theme.get("border_color", "#30363d"),
+        stroke_width=stroke_width,
+        opacity=opacity
+    ))
+
+
+def draw_shadow_overlay(dwg, width, height, color="#000000",
+                        opacity=0.15, rx=10, ry=10, offset=4):
+    """
+    Draws a subtle drop-shadow effect as a slightly offset dark rect.
+    Replaces repeated pattern of adding a shadow rect behind the card.
+
+    Args:
+        dwg: svgwrite Drawing object
+        width: card width
+        height: card height
+        color: shadow color (default black)
+        opacity: shadow opacity (default 0.15)
+        rx: border radius (default 10)
+        ry: border radius (default 10)
+        offset: shadow offset in px (default 4)
+    """
+    dwg.add(dwg.rect(
+        insert=(offset, offset),
+        size=(width, height),
+        rx=rx, ry=ry,
+        fill=color,
+        opacity=opacity
+    ))
+
+
+def draw_section_title(dwg, text, x, y, theme,
+                       font_size=None, font_weight="bold"):
+    """
+    Draws a section header/title text using theme title color and font.
+    Replaces repeated dwg.text(...fill=title_color, font_weight=bold) pattern.
+
+    Args:
+        dwg: svgwrite Drawing object
+        text: title string to display
+        x, y: insert position
+        theme: theme dict with title_color, font_family, title_font_size
+        font_size: override font size (uses theme default if None)
+        font_weight: font weight (default "bold")
+    """
+    dwg.add(dwg.text(
+        text,
+        insert=(x, y),
+        fill=theme.get("title_color", "#58a6ff"),
+        font_size=font_size or theme.get("title_font_size", 14),
+        font_family=theme.get("font_family", "Segoe UI, Ubuntu, sans-serif"),
+        font_weight=font_weight
+    ))
+
+# ── End SVG Helpers ───────────────────────────────────────────────────────────

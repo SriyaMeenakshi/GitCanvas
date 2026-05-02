@@ -1,4 +1,3 @@
-
 THEMES = {
     "Default": {
         "bg_color": "#0d1117",
@@ -8,7 +7,30 @@ THEMES = {
         "icon_color": "#8b949e",
         "font_family": "Segoe UI, Ubuntu, Sans-Serif",
         "title_font_size": 20,
-        "text_font_size": 14
+        "text_font_size": 14,
+        "tags": ["dark", "minimal", "clean", "popular"]
+    },
+   "Spider-Man": {
+    "bg_color": "#050505",
+    "border_color": "#ff0000",
+    "title_color": "#005aff",
+    "text_color": "#ede7e7",
+    "icon_color": "#b50505",
+    "font_family": "'Courier New', sans-serif",
+    "title_font_size": 24,
+    "text_font_size": 14,
+    "tags": ["balanced", "classic", "vibrant", "readable"]
+},
+    "Music": {
+        "bg_color": "#0d0d0d",
+        "border_color": "#9d00ff",
+        "title_color": "#ff00cc",
+        "text_color": "#ffffff",
+        "icon_color": "#00f5ff",
+        "font_family": "'Courier New', Courier, monospace",
+        "title_font_size": 20,
+        "text_font_size": 14,
+        "tags": ["dark", "music", "neon", "colorful", "fun"]
     },
     "Gaming": {
         "bg_color": "#0d0d0d",
@@ -19,7 +41,8 @@ THEMES = {
         "font_family": "'Courier New', Courier, monospace",
         "title_font_size": 18,
         "text_font_size": 14,
-        "is_pixel": True
+        "is_pixel": True,
+        "tags": ["dark", "gaming", "neon", "fun", "pixel"]
     },
     "Marvel": {
         "bg_color": "#1a1a1a",
@@ -29,7 +52,8 @@ THEMES = {
         "icon_color": "#e23636",
         "font_family": "Impact, sans-serif",
         "title_font_size": 22,
-        "text_font_size": 14
+        "text_font_size": 14,
+        "tags": ["dark", "colorful", "fun", "bold"]
     },
     "Space": {
         "bg_color": "#0b0c1f",
@@ -39,7 +63,8 @@ THEMES = {
         "icon_color": "#39d353",
         "font_family": "Verdana, Geneva, sans-serif",
         "title_font_size": 18,
-        "text_font_size": 14
+        "text_font_size": 14,
+        "tags": ["dark", "space", "minimal", "cool"]
     },
     "Dracula": {
         "bg_color": "#282a36",
@@ -49,17 +74,19 @@ THEMES = {
         "icon_color": "#50fa7b",
         "font_family": "Segoe UI, Ubuntu, Sans-Serif",
         "title_font_size": 20,
-        "text_font_size": 14
+        "text_font_size": 14,
+        "tags": ["dark", "colorful", "popular", "cool"]
     },
     "Neural": {
-    "bg_color": "#0a0f14",        
-    "border_color": "#1f6feb",    
-    "title_color": "#00e5ff",    
-    "text_color": "#9be7ff",      
-    "icon_color": "#00bcd4",      
-    "font_family": "'Consolas', 'Lucida Console', monospace",
-    "title_font_size": 19,
-    "text_font_size": 14
+        "bg_color": "#0a0f14",
+        "border_color": "#1f6feb",
+        "title_color": "#00e5ff",
+        "text_color": "#9be7ff",
+        "icon_color": "#00bcd4",
+        "font_family": "'Consolas', 'Lucida Console', monospace",
+        "title_font_size": 19,
+        "text_font_size": 14,
+        "tags": ["dark", "tech", "neon", "minimal"]
     },
     "Pacman": {
         "bg_color": "#000000",
@@ -69,7 +96,8 @@ THEMES = {
         "icon_color": "#ff8c00",
         "font_family": "'Courier New', Courier, monospace",
         "title_font_size": 18,
-        "text_font_size": 14
+        "text_font_size": 14,
+        "tags": ["dark", "gaming", "fun", "retro", "pixel"]
     },
     "Cyberpunk": {
         "bg_color": "#0a0e27",
@@ -79,33 +107,60 @@ THEMES = {
         "icon_color": "#ff00ff",
         "font_family": "'Courier New', monospace",
         "title_font_size": 18,
-        "text_font_size": 14
+        "text_font_size": 14,
+        "tags": ["dark", "neon", "colorful", "fun", "bold"]
     }
 }
 import json
+import os
 from pathlib import Path
+from themes.aurora_gradient import AURORA_GRADIENT
 
 
 themes_dir = Path(__file__).parent / "json"
 themes_dir.mkdir(exist_ok=True)
 
+
+def _theme_name_from_stem(stem: str) -> str:
+    """Convert a theme filename stem into a human-friendly theme name."""
+    aliases = {
+        "spiderman": "Spider-Man",
+        "aurora_gradient": "Aurora Gradient",
+    }
+    if stem in aliases:
+        return aliases[stem]
+
+    return stem.replace("_", " ").replace("-", " ").title()
+
+def normalize_theme_colors(theme_data):
+    """Ensure hex color values include a leading #."""
+    for key, value in theme_data.items():
+        if key.endswith("_color") and isinstance(value, str) and value and not value.startswith("#"):
+            theme_data[key] = f"#{value}"
+    return theme_data
+
+
 def load_predefined_themes():
     """Load predefined themes from JSON files"""
-    for theme_file in themes_dir.iterdir():
-        if theme_file.is_file() and theme_file.suffix == ".json" and not theme_file.name.startswith("custom_"):
-            theme_name = theme_file.stem.capitalize()  # Remove .json and capitalize
-            with theme_file.open('r') as f:
-                THEMES[theme_name] = json.load(f)
+    if os.path.exists(themes_dir):
+        for filename in os.listdir(themes_dir):
+            if filename.endswith('.json') and not filename.startswith('custom_'):
+                theme_name = _theme_name_from_stem(filename[:-5])
+                with open(os.path.join(themes_dir, filename), 'r') as f:
+                    theme_data = json.load(f)
+                THEMES[theme_name] = normalize_theme_colors(theme_data)
 
 def load_custom_themes():
     """Load custom themes from custom_*.json files"""
     custom_themes = {}
-    for theme_file in themes_dir.iterdir():
-        if theme_file.is_file() and theme_file.name.startswith('custom_') and theme_file.suffix == '.json':
-            # Extract theme name from custom_{name}.json
-            theme_name = theme_file.stem[7:].capitalize()  # Remove 'custom_' and '.json'
-            with theme_file.open('r') as f:
-                custom_themes[theme_name] = json.load(f)
+    if os.path.exists(themes_dir):
+        for filename in os.listdir(themes_dir):
+            if filename.startswith('custom_') and filename.endswith('.json'):
+                # Extract theme name from custom_{name}.json
+                theme_name = _theme_name_from_stem(filename[7:-5])
+                with open(os.path.join(themes_dir, filename), 'r') as f:
+                    theme_data = json.load(f)
+                custom_themes[theme_name] = normalize_theme_colors(theme_data)
     return custom_themes
 
 def save_custom_theme(theme_name, theme_data):
@@ -153,6 +208,7 @@ THEMES["Retro"] = {
     "title_font_size": 18,
     "text_font_size": 14
 }
-
+THEMES.pop("Aurora_gradient", None)
+THEMES["Aurora Gradient"] = AURORA_GRADIENT.copy()
 # Load custom themes on module import
 CUSTOM_THEMES = load_custom_themes()
