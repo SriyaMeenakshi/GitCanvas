@@ -1,6 +1,25 @@
 import svgwrite
 from themes.styles import THEMES
 
+
+def get_theme_color(theme: dict, key: str, fallback: str) -> str:
+    """
+    Safely retrieve a color value from a theme dictionary.
+    
+    Eliminates the need for verbose double-default patterns like:
+        theme.get("color_key", "#default") or "#default"
+    
+    Args:
+        theme: Theme dictionary from THEMES
+        key: Color key to retrieve (e.g., "success_color", "border_color")
+        fallback: Default color value if key is missing or None
+        
+    Returns:
+        Color string (hex or named color)
+    """
+    return theme.get(key) or fallback
+
+
 # CSS Animation Definitions - Reusable across all card generators
 CSS_ANIMATIONS = """
     /* Fade In Animation */
