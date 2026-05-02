@@ -10,18 +10,16 @@ THEMES = {
         "text_font_size": 14,
         "tags": ["dark", "minimal", "clean", "popular"]
     },
-    "Arc Reactor": {
-    "bg_color": "#020617",          # deep space
-    "border_color": "#00eaff",      # cyan glow
-    "title_color": "#4cc9f0",       # soft blue
-    "text_color": "#e0f7ff",        # readable light
-    "icon_color": "#c0c0c0",        # 👈 silver 
-
-    "font_family": "'Segoe UI', sans-serif",
-    "title_font_size": 20,
+   "Arc Reactor Wave": {
+    "bg_color": "#010409",
+    "border_color": "#b87333",
+    "title_color": "#00eaff",
+    "text_color": "#e0f7ff",
+    "icon_color": "#ffffff",
+    "font_family": "'Orbitron', 'Segoe UI', monospace",
+    "title_font_size": 22,
     "text_font_size": 14,
-
-    "tags": ["dark", "energy", "glow"]
+    "tags": ["stark-tech", "energy", "cyan", "glow"]
 },
     "Music": {
         "bg_color": "#0d0d0d",
