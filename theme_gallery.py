@@ -233,7 +233,7 @@ def render_theme_gallery(all_themes: dict, current_theme: str, font_override: st
         row_slice = themes_list[row_start: row_start + 4]
         cols      = st.columns(4)
 
-        for col, (theme_name, _) in zip(cols, row_slice):
+        for col_offset, (col, (theme_name, _)) in enumerate(zip(cols, row_slice)):
             is_active  = theme_name == current_theme
             svg_html   = svg_map.get(theme_name, "")
             card_class = "theme-card-wrap theme-card-active" if is_active else "theme-card-wrap theme-card-inactive"
@@ -252,7 +252,7 @@ def render_theme_gallery(all_themes: dict, current_theme: str, font_override: st
                 else:
                     if st.button(
                         "Select",
-                        key=f"gallery_btn_{theme_name}",
+                        key=f"gallery_btn_{row_start}_{col_offset}_{theme_name}",
                         use_container_width=True,
                     ):
                         selected = theme_name
