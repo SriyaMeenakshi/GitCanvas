@@ -2,7 +2,7 @@ import svgwrite
 from themes.styles import THEMES
 from .svg_base import create_svg_base
 
-def draw_streak_card(data, theme_name="Default", custom_colors=None):
+def draw_streak_card(data, theme_name="Default", custom_colors=None, animations_enabled=True):
     """
     Generates the GitHub Streak Card SVG showing current and longest streak.
     data: dict with user stats including streak_data
@@ -17,7 +17,7 @@ def draw_streak_card(data, theme_name="Default", custom_colors=None):
     
     # Validate username to prevent KeyError
     username = data.get('username', 'Unknown')
-    dwg, theme = create_svg_base(theme_name, custom_colors, width, height, f"{username}'s GitHub Streak")
+    dwg, theme = create_svg_base(theme_name, custom_colors, width, height, f"{username}'s GitHub Streak", animations_enabled=animations_enabled)
     
     font_family = theme["font_family"]
     text_color = theme["text_color"]
