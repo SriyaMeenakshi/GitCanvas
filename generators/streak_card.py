@@ -46,12 +46,12 @@ def draw_streak_card(data, theme_name="Default", custom_colors=None):
                      text_anchor="middle"))
     
     # Current Streak Value
-    dwg.add(dwg.text(f"{current_streak}", insert=(flame_x, flame_y - 35), 
+    dwg.add(dwg.text(f"{current_streak}", insert=(flame_x, flame_y - 50), 
                      fill=title_color, font_size=32, font_family=font_family, 
                      text_anchor="middle", font_weight="bold"))
     
     # Current Streak Unit
-    dwg.add(dwg.text("days", insert=(flame_x, flame_y - 10), 
+    dwg.add(dwg.text("days", insert=(flame_x, flame_y - 30), 
                      fill=text_color, font_size=14, font_family=font_family, 
                      text_anchor="middle"))
     
@@ -94,12 +94,12 @@ def draw_streak_card(data, theme_name="Default", custom_colors=None):
                      text_anchor="middle"))
     
     # Longest Streak Value
-    dwg.add(dwg.text(f"{longest_streak}", insert=(trophy_x, trophy_y - 35), 
+    dwg.add(dwg.text(f"{longest_streak}", insert=(trophy_x, trophy_y - 50), 
                      fill=title_color, font_size=32, font_family=font_family, 
                      text_anchor="middle", font_weight="bold"))
     
     # Longest Streak Unit
-    dwg.add(dwg.text("days", insert=(trophy_x, trophy_y - 10), 
+    dwg.add(dwg.text("days", insert=(trophy_x, trophy_y - 30), 
                      fill=text_color, font_size=14, font_family=font_family, 
                      text_anchor="middle"))
     
