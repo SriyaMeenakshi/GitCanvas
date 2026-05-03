@@ -1,4 +1,5 @@
 import streamlit as st  # type: ignore
+import streamlit.components.v1 as components
 import base64
 import json
 import os
@@ -539,8 +540,9 @@ def render_embedded_html(html_content: str, *, height: int) -> None:
 
     Streamlit deprecates st.components.v1.html after 2026-06-01.
     """
-    data_url = "data:text/html;charset=utf-8," + quote(html_content)
-    st.iframe(data_url, height=height)
+    # Use Streamlit components to render arbitrary HTML safely.
+    # `components.html` creates an isolated iframe and supports inline scripts/styles.
+    components.html(html_content, height=height, scrolling=True)
 
 def render_tab(svg_bytes, endpoint, username, selected_theme, custom_colors, hide_params=None, code_template=None, excluded_languages=None, output_format="Markdown", font_override=None, extra_params=None):
     if font_override:
