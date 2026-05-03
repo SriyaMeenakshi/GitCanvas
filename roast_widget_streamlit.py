@@ -4,6 +4,7 @@ Add this to your GitCanvas Streamlit app
 """
 
 import streamlit as st
+import requests
 from typing import Any
 from ai.ai_roast_service import generate_profile_roast
 from utils.github_utils import fetch_github_stats
@@ -168,7 +169,7 @@ def render_roast_widget(username: str, profile_data: dict[str, Any] | None = Non
                             st.error(f"Unexpected error: {type(e).__name__}. Please try again.")
             
             with col2:
-                if st.button("📋 Copy", use_container_width=True):
+                if st.button("📋 Copy", key=f"roast_copy_{username}", use_container_width=True):
                     st.write("Roast copied to clipboard!")
                     # Note: Direct clipboard access limited in Streamlit
                     st.code(roast_text, language=None)

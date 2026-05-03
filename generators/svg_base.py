@@ -3,13 +3,13 @@ from themes.styles import THEMES
 
 
 _FONT_FACE_MAP = {
-    "inter": ("Inter", "Inter:wght@400;500;600;700;800", "'Inter', system-ui, sans-serif"),
-    "merriweather": ("Merriweather", "Merriweather:wght@400;700", "'Merriweather', serif"),
-    "playfairdisplay": ("Playfair Display", "Playfair+Display:wght@400;500;600;700;800", "'Playfair Display', serif"),
+    "rubik": ("Rubik", "Rubik:wght@400;500;600;700;800", "'Rubik', sans-serif"),
     "oswald": ("Oswald", "Oswald:wght@400;500;600;700", "'Oswald', sans-serif"),
     "orbitron": ("Orbitron", "Orbitron:wght@400;500;600;700;800;900", "'Orbitron', sans-serif"),
     "firacode": ("Fira Code", "Fira+Code:wght@400;500;600;700", "'Fira Code', monospace"),
-    "rubik": ("Rubik", "Rubik:wght@400;500;600;700;800", "'Rubik', sans-serif"),
+    "dancingscript": ("Dancing Script", "Dancing+Script:wght@400;500;600;700", "'Dancing Script', cursive"),
+    "greatvibes": ("Great Vibes", "Great+Vibes", "'Great Vibes', cursive"),
+    "pacifico": ("Pacifico", "Pacifico", "'Pacifico', cursive"),
 }
 
 
