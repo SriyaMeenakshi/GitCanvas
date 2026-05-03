@@ -93,7 +93,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("GitCanvas: Profile Architect 🛠️")
-st.markdown("### Design your GitHub Stats. Copy the Code. Done.")
+st.markdown("### Craft a stunning GitHub profile card — pick a theme, preview instantly, and export in seconds.")
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -346,7 +346,7 @@ with st.sidebar:
     animations_enabled = st.checkbox("Enable Animations", value=False, help="Enable SVG animations for cards that support it")
     
     # Output format selector
-    output_format = st.radio("Output Format", ["Markdown", "HTML"], index=0, help="Choose between Markdown or HTML code format")
+    output_format = st.radio("Output Format", ["Markdown", "HTML"], index=0, help="markdown: best for github readme files - paste directly into your profile repo. html: gives full styling control, ideal for personal websites or portfolios.")
     
     # Dev/Test mock data toggle
     use_mock_data = st.checkbox("Use Mock Data on API Failure", value=False, help="Dev/Test mode: fallback to mock data if GitHub API hits rate limits or errors.")
