@@ -20,6 +20,7 @@ THEMES = {
     "title_font_size": 22,
     "text_font_size": 14,
     "tags": ["stark-tech", "energy", "cyan", "glow"]
+   },
    "Spider-Man": {
     "bg_color": "#050505",
     "border_color": "#ff0000",
