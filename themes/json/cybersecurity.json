@@ -1,0 +1,11 @@
+{
+    "bg_color": "#0d0d0d",
+    "border_color": "#00ff41",
+    "title_color": "#00ff41",
+    "text_color": "#00aa2a",
+    "icon_color": "#00ff41",
+    "font_family": "Courier New, monospace",
+    "title_font_size": 20,
+    "text_font_size": 14,
+    "tags": ["cybersecurity", "hacker", "terminal"]
+}
