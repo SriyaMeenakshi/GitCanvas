@@ -10,17 +10,28 @@ THEMES = {
         "text_font_size": 14,
         "tags": ["dark", "minimal", "clean", "popular"]
     },
-   "Arc Reactor Wave": {
-    "bg_color": "#010409",
-    "border_color": "#b87333",
-    "title_color": "#00eaff",
-    "text_color": "#e0f7ff",
-    "icon_color": "#ffffff",
-    "font_family": "'Orbitron', 'Segoe UI', monospace",
-    "title_font_size": 22,
-    "text_font_size": 14,
-    "tags": ["stark-tech", "energy", "cyan", "glow"]
-   },
+    "Iron-Man-Cinematic": {
+        "bg_color": "#1a0000",
+        "border_color": "#ff0000",
+        "title_color": "#ffcc00",
+        "text_color": "#ffffff",
+        "icon_color": "#ffcc00",
+        "font_family": "'Orbitron', monospace",
+        "title_font_size": 22,
+        "text_font_size": 14,
+        "tags": ["stark-industries", "cinematic", "glow", "hud"]
+    },
+    "Arc Reactor Wave": {
+        "bg_color": "#010409",
+        "border_color": "#b87333",
+        "title_color": "#00eaff",
+        "text_color": "#e0f7ff",
+        "icon_color": "#ffffff",
+        "font_family": "'Orbitron', 'Segoe UI', monospace",
+        "title_font_size": 22,
+        "text_font_size": 14,
+        "tags": ["stark-tech", "energy", "cyan", "glow"]
+    },
    "Spider-Man": {
     "bg_color": "#050505",
     "border_color": "#ff0000",
