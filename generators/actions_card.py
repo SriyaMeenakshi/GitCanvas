@@ -1,6 +1,6 @@
 import svgwrite
 from themes.styles import THEMES
-from .svg_base import create_svg_base, CSS_ANIMATIONS
+from .svg_base import create_svg_base, CSS_ANIMATIONS, get_theme_color
 
 
 def draw_actions_card(data, theme_name="Default", custom_colors=None, animations_enabled=True):
@@ -145,11 +145,11 @@ def draw_actions_card(data, theme_name="Default", custom_colors=None, animations
     y_pos += stat_item_height
     
     add_stat_row(y_pos, "Successful:", successful_runs,
-                 value_color=theme.get("success_color", "#238636") or "#238636")
+                 value_color=get_theme_color(theme, "success_color", "#238636"))
     y_pos += stat_item_height
     
     add_stat_row(y_pos, "Failed:", failed_runs,
-                 value_color=theme.get("fail_color", "#f85149") or "#f85149")
+                 value_color=get_theme_color(theme, "fail_color", "#f85149"))
     y_pos += stat_item_height
     
     # Success rate with progress bar
@@ -190,11 +190,11 @@ def draw_actions_card(data, theme_name="Default", custom_colors=None, animations
         
         # Color based on success rate
         if success_rate >= 90:
-            bar_color = theme.get("success_color", "#238636") or "#238636"
+            bar_color = get_theme_color(theme, "success_color", "#238636")
         elif success_rate >= 70:
-            bar_color = theme.get("warning_color", "#d29922") or "#d29922"
+            bar_color = get_theme_color(theme, "warning_color", "#d29922")
         else:
-            bar_color = theme.get("fail_color", "#f85149") or "#f85149"
+            bar_color = get_theme_color(theme, "fail_color", "#f85149")
         
         dwg.add(dwg.rect(
             insert=(25, bar_y),
@@ -230,13 +230,13 @@ def draw_actions_card(data, theme_name="Default", custom_colors=None, animations
             
             # Status color
             if conclusion == 'success':
-                status_color = theme.get("success_color", "#238636") or "#238636"
+                status_color = get_theme_color(theme, "success_color", "#238636")
                 status_icon = "✓"
             elif conclusion == 'failure':
-                status_color = theme.get("fail_color", "#f85149") or "#f85149"
+                status_color = get_theme_color(theme, "fail_color", "#f85149")
                 status_icon = "✗"
             else:
-                status_color = theme.get("icon_color", "#58a6ff") or "#58a6ff"
+                status_color = get_theme_color(theme, "icon_color", "#58a6ff")
                 status_icon = "○"
             
             # Status indicator
