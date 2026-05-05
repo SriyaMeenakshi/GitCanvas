@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="GitCanvas - Transform your GitHub profile into stunning visual art." />
+  <title>GitCanvas | Profile Art Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./frontend/landing-styles.css" />
+</head>
+<body>
+  <!-- Animated Background -->
+  <div class="glow-bg">
+    <div class="glow-orb color-violet-1"></div>
+    <div class="glow-orb color-violet-2"></div>
+    <div class="noise-bg"></div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="glass-nav">
+    <div class="nav-content">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="9" height="9" rx="2" fill="currentColor"/>
+          <rect x="13" y="2" width="9" height="9" rx="2" fill="currentColor" fill-opacity="0.5"/>
+          <rect x="2" y="13" width="9" height="9" rx="2" fill="currentColor" fill-opacity="0.5"/>
+          <rect x="13" y="13" width="9" height="9" rx="2" fill="currentColor" fill-opacity="0.8"/>
+        </svg>
+        <span>GitCanvas</span>
+      </div>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#bento">Showcase</a>
+        <a href="#about">About</a>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/devanshi14malhotra/GitCanvas" target="_blank" class="github-badge">
+          <svg class="gh-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
+          <span class="badge-separator"></span>
+          <svg class="star-icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>
+          <span id="github-star-count" class="badge-count">Star</span>
+          <span class="badge-separator"></span>
+          <svg class="fork-icon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"></path></svg>
+          <span id="github-fork-count" class="badge-count">Fork</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <h1 class="hero-title">
+        The ultimate design kit<br />
+        <span class="text-gradient">for your GitHub profile.</span>
+      </h1>
+      <p class="hero-subtitle">
+        Elevate your readme with stunning themes, dynamic SVG animations, and AI-powered insights. Instantly generated. Completely free.
+      </p>
+      <div class="hero-buttons">
+        <a href="app.html" class="btn btn-primary btn-large glow-btn">Open Web App</a>
+        <a href="https://gitcanvas-dm.streamlit.app/" target="_blank" class="btn btn-secondary btn-large">Open Streamlit App</a>
+      </div>
+    </section>
+
+    <!-- Bento Box Showcase Grid -->
+    <section class="bento-section" id="bento">
+      <div class="bento-grid">
+        
+        <!-- Large Card: Main Stats -->
+        <div class="bento-box box-large glass-panel hover-glow">
+          <div class="box-content">
+            <h3 class="box-title">Deep Analytics</h3>
+            <p class="box-desc">Track everything from commits to stars in a beautiful, responsive SVG format.</p>
+          </div>
+          <div class="box-visual visual-deep" style="padding: 0 10px 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 15px;">
+            <img src="http://127.0.0.1:8000/api/stats?username=devanshi14malhotra&theme=Cyberpunk" alt="Main Stats Card" style="width: 100%; max-width: 400px; height: auto; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" onerror="this.style.display='none'" />
+            <img src="http://127.0.0.1:8000/api/sparkline?username=devanshi14malhotra&theme=Cyberpunk" alt="30-Day Sparkline" style="width: 100%; max-width: 400px; height: auto; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" onerror="this.style.display='none'" />
+          </div>
+        </div>
+
+        <!-- Medium Card: AI -->
+        <div class="bento-box box-medium glass-panel hover-glow accent-purple">
+          <div class="box-content">
+            <h3 class="box-title">AI Powered</h3>
+            <p class="box-desc">Generate intelligent summaries and engaging insights instantly.</p>
+          </div>
+          <div class="box-visual visual-ai" style="padding: 20px;">
+            <div style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+              <strong style="color: #a78bfa;">@devanshi14malhotra</strong>
+              <p style="color: #94a3b8; font-size: 14px; margin-top: 8px; font-style: italic;">"A prolific open-source contributor known for weaving magic with code, heavily focused on python and modern frontend aesthetics."</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Medium Card: Theme Gallery Showcase -->
+        <div class="bento-box box-medium glass-panel hover-glow">
+          <div class="box-content">
+            <h3 class="box-title">15+ Stunning Themes</h3>
+            <p class="box-desc">Instantly switch between Stranger Things, Space, Cyberpunk, Marvel, Pacman, and more.</p>
+          </div>
+          <div class="box-visual" style="padding: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px;">
+            <img src="http://127.0.0.1:8000/api/theme-preview?theme=Stranger%20Things" alt="Stranger Things Theme" style="width: 45%; max-width: 180px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" onerror="this.style.display='none'" />
+            <img src="http://127.0.0.1:8000/api/theme-preview?theme=Cyberpunk" alt="Cyberpunk Theme" style="width: 45%; max-width: 180px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" onerror="this.style.display='none'" />
+            <img src="http://127.0.0.1:8000/api/theme-preview?theme=Space" alt="Space Theme" style="width: 45%; max-width: 180px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" onerror="this.style.display='none'" />
+            <img src="http://127.0.0.1:8000/api/theme-preview?theme=Marvel" alt="Marvel Theme" style="width: 45%; max-width: 180px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" onerror="this.style.display='none'" />
+          </div>
+        </div>
+
+        <!-- Wide Card: Activity Graph -->
+        <div class="bento-box box-wide glass-panel hover-glow accent-violet">
+          <div class="box-content">
+            <h3 class="box-title">Contribution Heatmaps</h3>
+            <p class="box-desc">Visualize your coding streaks with custom color scales and intensity modes.</p>
+          </div>
+          <div class="box-visual visual-heatmap" style="padding: 0 10px 10px; text-align: center; display: flex; align-items: center; justify-content: center;">
+            <img src="http://127.0.0.1:8000/api/calendar-heatmap?username=devanshi14malhotra&theme=Space" alt="Heatmap Showcase" style="max-width: 100%; height: auto; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" onerror="this.style.display='none'" />
+          </div>
+        </div>
+
+        <!-- Medium Card: Open Source -->
+        <div class="bento-box box-medium glass-panel hover-glow">
+          <div class="box-content">
+            <h3 class="box-title">100% Open Source</h3>
+            <p class="box-desc">Built for the developer community. Star the project on GitHub and help us add more themes and features.</p>
+            <a href="https://github.com/devanshi14malhotra/GitCanvas" target="_blank" class="btn btn-secondary mt-4">View Repository</a>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- About / Open Source Section -->
+    <section class="about-section" id="about">
+      <div class="about-container glass-panel">
+        <div class="about-content">
+          <h2 class="section-title">Rooted in Open Source</h2>
+          <p class="section-text">
+            GitCanvas is a community-driven project built by passionate developers. It has proudly participated in prestigious open-source events including <strong>Apertre 3.0</strong>, <strong>ACM Sourcery</strong>, and <strong>Nexus Spring of Code 2026</strong>.
+          </p>
+          <p class="section-text">
+            Whether you want to generate stunning visual stats for your profile or contribute to the codebase, GitCanvas welcomes you. Join us in making GitHub profiles beautiful for everyone.
+          </p>
+          <div class="about-stats">
+            <div class="stat-item">
+              <span class="stat-number">15+</span>
+              <span class="stat-label">Themes</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-number">12</span>
+              <span class="stat-label">Card Types</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-number">100%</span>
+              <span class="stat-label">Free & Open</span>
+            </div>
+          </div>
+          
+          <!-- Theme Gallery Showcase in About -->
+          <div class="theme-showcase-about">
+            <h3 style="font-family: 'Outfit'; margin-top: 40px; margin-bottom: 16px;">Available Themes</h3>
+            <div class="theme-dots" style="justify-content: center; gap: 16px;">
+              <div class="t-dot" style="background: #a78bfa" title="Cyberpunk"></div>
+              <div class="t-dot" style="background: #22d3ee" title="Space"></div>
+              <div class="t-dot" style="background: #f472b6" title="Marvel"></div>
+              <div class="t-dot" style="background: #fbbf24" title="Fire"></div>
+              <div class="t-dot" style="background: #4ade80" title="Matrix"></div>
+              <div class="t-dot" style="background: #94a3b8" title="Default"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call to action -->
+    <section class="cta-section">
+      <div class="cta-container glass-panel">
+        <h2>Ready to upgrade your profile?</h2>
+        <p>Join developers using GitCanvas to make their GitHub readmes stand out.</p>
+        <div class="cta-buttons">
+          <a href="app.html" class="btn btn-primary btn-large glow-btn">Open Web App</a>
+          <a href="https://gitcanvas-dm.streamlit.app/" target="_blank" class="btn btn-secondary btn-large">Open Streamlit App</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="brand-footer">
+        <span class="font-outfit font-bold" style="font-size: 20px; color: var(--text-primary);">GitCanvas</span>
+        <p style="margin-top: 8px;">Elevate your Github profile with stunning visual art.</p>
+        <p class="footer-credit">Crafted with <span style="color: var(--accent-pink);">♥</span> by <a href="https://github.com/devanshi14malhotra" target="_blank">@devanshi14malhotra</a></p>
+      </div>
+      <div class="footer-links-icons">
+        <a href="https://github.com/devanshi14malhotra/GitCanvas" target="_blank" title="GitHub Repository">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-4m14 6v-3.87a3.375 3.375 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+        </a>
+        <a href="app.html" title="Web App Builder">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        </a>
+        <a href="https://gitcanvas-dm.streamlit.app/" target="_blank" title="Streamlit App">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+        </a>
+        <a href="https://www.linkedin.com/in/devanshi5malhotra" target="_blank" title="LinkedIn">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Parallax effect for glow orbs
+    document.addEventListener('mousemove', (e) => {
+      const orbs = document.querySelectorAll('.glow-orb');
+      const x = e.clientX / window.innerWidth;
+      const y = e.clientY / window.innerHeight;
+      
+      orbs.forEach((orb, index) => {
+        const factor = (index + 1) * 20;
+        orb.style.transform = `translate(${x * factor}px, ${y * factor}px)`;
+      });
+    });
+
+    // Fetch GitHub stars and forks for the repository
+    fetch('https://api.github.com/repos/devanshi14malhotra/GitCanvas')
+      .then(response => response.json())
+      .then(data => {
+        const starCounter = document.getElementById('github-star-count');
+        const forkCounter = document.getElementById('github-fork-count');
+        if (starCounter && data.stargazers_count !== undefined) {
+          starCounter.textContent = data.stargazers_count;
+        }
+        if (forkCounter && data.forks_count !== undefined) {
+          forkCounter.textContent = data.forks_count;
+        }
+      })
+      .catch(err => console.error('Error fetching repo data:', err));
+  </script>
+</body>
+</html>

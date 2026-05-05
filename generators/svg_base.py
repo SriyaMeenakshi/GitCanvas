@@ -30,6 +30,23 @@ def get_svg_font_style(font_family):
 
     return f"text, tspan, .svg-font {{ font-family: {font_family} !important; }}"
 
+
+def get_theme_color(theme: dict | None, key: str, default: str) -> str:
+    """
+    Safe helper to fetch a color from a theme dict with a fallback.
+
+    Args:
+        theme: Theme dictionary (may be None)
+        key: Color key to lookup
+        default: Fallback color string if key missing
+
+    Returns:
+        The resolved color string.
+    """
+    if not theme or not isinstance(theme, dict):
+        return default
+    return theme.get(key, default)
+
 # CSS Animation Definitions - Reusable across all card generators
 CSS_ANIMATIONS = """
     /* Fade In Animation */

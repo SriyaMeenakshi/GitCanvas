@@ -1,6 +1,7 @@
 import svgwrite
 from themes.styles import THEMES
 from .svg_base import create_svg_base, draw_card_background, draw_divider_line
+from utils.constants import LANGUAGE_COLORS
 
 def draw_repo_card(data, theme_name="Default", custom_colors=None, sort_by="stars", limit=5, compact=False, animations_enabled=True):
     """

@@ -9,6 +9,8 @@ import logging
 import svgwrite
 from datetime import date, datetime, timedelta, timezone
 from .svg_base import create_svg_base, CSS_ANIMATIONS, draw_card_background
+from themes.styles import THEMES
+from generators.themes import THEME_DISPATCHER, render_default_theme
 
 logger = logging.getLogger(__name__)
 

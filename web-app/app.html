@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="GitCanvas Builder - Create and customize your GitHub profile cards" />
+  <title>GitCanvas Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./frontend/app-styles.css" />
+</head>
+<body>
+  <!-- Black-Violet Gradient Background -->
+  <div class="bg-container">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="noise-overlay"></div>
+  </div>
+
+  <div class="app-layout">
+    
+    <!-- Left Sidebar: Only Tabs -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <a href="index.html" class="back-link">Back</a>
+        <div class="brand">
+          <span class="brand-text font-outfit">GitCanvas</span>
+        </div>
+        <button id="themeToggleSidebar" class="theme-toggle-sidebar" title="Toggle theme">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+      </div>
+      
+      <div class="api-limit-counter" title="GitHub API Rate Limit">
+        API Status: <span id="apiLimitText">Unknown</span>
+      </div>
+
+      <div class="vertical-tabs-menu">
+        <button class="tab-btn active" data-target="tab-theme-gallery">Theme Gallery</button>
+        <button class="tab-btn" data-target="tab-main-stats">Main Stats</button>
+        <button class="tab-btn" data-target="tab-languages">Languages</button>
+        <button class="tab-btn" data-target="tab-repos">Top Repositories</button>
+        <button class="tab-btn" data-target="tab-contributions">Contributions</button>
+        <button class="tab-btn" data-target="tab-sparkline">30-Day Sparkline</button>
+        <button class="tab-btn" data-target="tab-heatmap">Commit Heatmap</button>
+        <button class="tab-btn" data-target="tab-actions">GitHub Actions</button>
+        <button class="tab-btn" data-target="tab-badges">Icons and Badges</button>
+        <button class="tab-btn" data-target="tab-social">Social Links Card</button>
+        <button class="tab-btn" data-target="tab-trophy">Trophy</button>
+        <button class="tab-btn" data-target="tab-roast">AI Roast</button>
+        <button class="tab-btn" data-target="tab-desc">AI Description</button>
+      </div>
+    </aside>
+
+    <!-- Right Main Area -->
+    <main class="main-content">
+      
+      <!-- Top Fixed Area: Global Settings -->
+      <div class="global-settings-bar">
+        <div class="settings-row">
+          <div class="input-group">
+            <label for="username">GitHub Username</label>
+            <input id="username" type="text" placeholder="Write your github profile name here..." value="devanshi14malhotra" />
+          </div>
+          <div class="input-group">
+            <label for="authToken">Auth Token (Optional)</label>
+            <input id="authToken" type="password" placeholder="Bearer token" />
+          </div>
+          <button id="loadProfileBtn" class="primary-btn">Load Profile</button>
+        </div>
+        
+        <div class="settings-row">
+          <div class="input-group">
+            <label for="themeSelect">Global Theme</label>
+            <select id="themeSelect" class="form-select">
+              <option value="Default">Default</option>
+              <option value="Space">Space</option>
+              <option value="Cyberpunk">Cyberpunk</option>
+              <option value="Matrix">Matrix</option>
+              <option value="Ocean">Ocean</option>
+              <option value="Forest">Forest</option>
+              <option value="Marvel">Marvel</option>
+              <option value="Glass">Glass</option>
+              <option value="Cricket">Cricket</option>
+              <option value="Pacman">Pac-Man</option>
+              <option value="Fire">Fire</option>
+              <option value="Music">Music</option>
+              <option value="Gaming">Gaming</option>
+              <option value="Neural">Neural</option>
+              <option value="Stranger Things">Stranger Things</option>
+            </select>
+          </div>
+          
+          <div class="input-group">
+            <label for="fontSelect">Global Font</label>
+            <select id="fontSelect" class="form-select">
+              <option value="Theme Default">Theme Default</option>
+              <option value="Inter">Inter</option>
+              <option value="Roboto">Roboto</option>
+              <option value="JetBrains Mono">JetBrains Mono</option>
+              <option value="Fira Code">Fira Code</option>
+              <option value="Poppins">Poppins</option>
+            </select>
+          </div>
+
+          <div class="checkbox-group inline-checks">
+            <label>
+              <input type="checkbox" id="animationsToggle" checked /> Enable Animations
+            </label>
+          </div>
+          
+          <details class="colors-expander">
+            <summary>Custom Colors</summary>
+            <div class="color-grid">
+              <div class="color-input">
+                <label for="bgColor">Bg</label>
+                <input type="color" id="bgColor" value="#000000" />
+              </div>
+              <div class="color-input">
+                <label for="titleColor">Title</label>
+                <input type="color" id="titleColor" value="#2F80ED" />
+              </div>
+              <div class="color-input">
+                <label for="textColor">Text</label>
+                <input type="color" id="textColor" value="#434D56" />
+              </div>
+              <div class="color-input">
+                <label for="borderColor">Border</label>
+                <input type="color" id="borderColor" value="#E4E2E2" />
+              </div>
+              <button id="resetColorsBtn" class="secondary-btn small">Reset</button>
+            </div>
+          </details>
+
+          <div class="input-group" style="flex-direction: row; align-items: center; gap: 16px; min-width: auto; margin-left: auto;">
+            <label>Embed Format:</label>
+            <label style="font-weight: 500; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-primary);"><input type="radio" name="embedFormat" value="markdown" checked> Markdown</label>
+            <label style="font-weight: 500; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-primary);"><input type="radio" name="embedFormat" value="html"> HTML</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="global-status-bar">
+        <span id="previewStatus">Initializing...</span>
+        <button id="refreshPreviewBtn" class="secondary-btn small">Refresh Display</button>
+      </div>
+      
+      <div id="loadingSpinner" class="loading-spinner" style="display: none;">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+      <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+      <div class="scrollable-content">
+        <!-- Tab: Theme Gallery -->
+        <div class="tab-content active" id="tab-theme-gallery">
+          <h2>Theme Gallery</h2>
+          <p class="tab-desc">Preview all available themes.</p>
+          <div class="theme-gallery-grid" id="themeGalleryPreview">
+            <p class="empty-state">Loading themes...</p>
+          </div>
+        </div>
+
+        <!-- Tab: Main Stats -->
+        <div class="tab-content" id="tab-main-stats">
+          <h2>Main Stats Card</h2>
+          <p class="tab-desc">Comprehensive overview of your GitHub activity.</p>
+          <div class="card-preview-container">
+            <img id="preview-stats" src="" alt="Main Stats Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Markdown Embed</h4>
+            <textarea id="markdown-stats" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Languages -->
+        <div class="tab-content" id="tab-languages">
+          <h2>Top Languages</h2>
+          <p class="tab-desc">Showcase your most used programming languages.</p>
+          <div class="card-preview-container">
+            <img id="preview-languages" src="" alt="Languages Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Markdown Embed</h4>
+            <textarea id="markdown-languages" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Repos -->
+        <div class="tab-content" id="tab-repos">
+          <h2>Top Repositories</h2>
+          <p class="tab-desc">Your most starred and active repositories.</p>
+          <div class="card-preview-container">
+            <img id="preview-repos" src="" alt="Repos Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Embed Code</h4>
+            <textarea id="markdown-repos" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Contributions -->
+        <div class="tab-content" id="tab-contributions">
+          <h2>Contributions</h2>
+          <p class="tab-desc">Detailed graph of your recent commits and PRs.</p>
+          <div class="card-preview-container">
+            <img id="preview-contributions" src="" alt="Contributions Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Embed Code</h4>
+            <textarea id="markdown-contributions" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Sparkline -->
+        <div class="tab-content" id="tab-sparkline">
+          <h2>30-Day Activity Sparkline</h2>
+          <p class="tab-desc">A beautiful sparkline showing your daily activity over the last month.</p>
+          <div class="card-preview-container">
+            <img id="preview-streak" src="" alt="Sparkline Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Embed Code</h4>
+            <textarea id="markdown-streak" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Heatmap -->
+        <div class="tab-content" id="tab-heatmap">
+          <h2>Commit Analysis Heatmap</h2>
+          <p class="tab-desc">Deep dive into your commit patterns and active hours.</p>
+          <div class="card-preview-container">
+            <img id="preview-calendar-heatmap" src="" alt="Heatmap Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Embed Code</h4>
+            <textarea id="markdown-calendar-heatmap" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Actions -->
+        <div class="tab-content" id="tab-actions">
+          <h2>GitHub Actions</h2>
+          <p class="tab-desc">Showcase your CI/CD workflow activity and API usage.</p>
+          <div class="card-preview-container">
+            <img id="preview-actions" src="" alt="Actions Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Embed Code</h4>
+            <textarea id="markdown-actions" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Badges -->
+        <div class="tab-content" id="tab-badges">
+          <h2>Icons and Badges</h2>
+          <p class="tab-desc">Clean badges displaying your tech stack and tools.</p>
+          <div class="card-preview-container">
+            <img id="preview-badges" src="" alt="Badges Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Embed Code</h4>
+            <textarea id="markdown-badges" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Social -->
+        <div class="tab-content" id="tab-social">
+          <h2>Social Links Card</h2>
+          <p class="tab-desc">A sleek card containing all your social and professional links.</p>
+          <div class="card-preview-container">
+            <img id="preview-social" src="" alt="Social Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Embed Code</h4>
+            <textarea id="markdown-social" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: Trophy -->
+        <div class="tab-content" id="tab-trophy">
+          <h2>Trophy</h2>
+          <p class="tab-desc">Visual elements representing your GitHub achievements.</p>
+          <div class="card-preview-container">
+            <img id="preview-trophy" src="" alt="Trophy Card" style="display: none;" />
+            <div class="empty-state">Loading...</div>
+          </div>
+          <div class="export-box mt-4">
+            <h4>Embed Code</h4>
+            <textarea id="markdown-trophy" class="output-textarea" readonly></textarea>
+          </div>
+        </div>
+
+        <!-- Tab: AI Roast -->
+        <div class="tab-content" id="tab-roast">
+          <h2>AI Profile Roast</h2>
+          <p class="tab-desc">Generate a humorous AI roast based on your coding habits.</p>
+          <button id="generateRoastBtn" class="primary-btn w-100">Generate Roast</button>
+          <div id="roastOutput" class="ai-output" style="display: none;"></div>
+        </div>
+
+        <!-- Tab: AI Description -->
+        <div class="tab-content" id="tab-desc">
+          <h2>AI Professional Description</h2>
+          <p class="tab-desc">Get a themed, professional summary for your resume or readme.</p>
+          <button id="generateDescriptionBtn" class="primary-btn w-100">Generate Description</button>
+          <div id="descriptionOutput" class="ai-output" style="display: none;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="./frontend/app.js"></script>
+</body>
+</html>
