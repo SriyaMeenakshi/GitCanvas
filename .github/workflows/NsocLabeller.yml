@@ -17,7 +17,7 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            const labelName = "NSOC'26";
+            const labelName = "NSoC'26";
             const color = "FFA500";
 
             try {
