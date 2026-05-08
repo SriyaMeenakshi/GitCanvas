@@ -1,49 +1,16 @@
 ---
 name: Enhancement
-about: Suggest improvements that don't add new features (refactoring, performance, docs)
+about: Suggest improvements that don't add new features
 title: "[ENHANCEMENT] "
-labels: type:maintenance
+labels: maintenance
 assignees: ''
 ---
 
-## Enhancement Category
-- [ ] Performance Optimization
-- [ ] Code Refactoring / Code Quality
-- [ ] Documentation Improvement
-- [ ] Accessibility Enhancement
-- [ ] Testing / Test Coverage
-- [ ] Dependency Update
-- [ ] Error Handling
-- [ ] Logging / Debugging
-- [ ] Other: _____
+## Summary
+A clear description of the proposed improvement.
 
-## Description
-A clear description of the improvement and why it matters.
+## Justification
+Why is this improvement necessary?
 
-## Current Behavior / State
-How is it currently? Include relevant code snippets or screenshots if applicable.
-
-## Proposed Improvement
-Describe the specific improvement:
-- For performance: What's the current bottleneck? Expected performance gain?
-- For refactoring: What patterns or principles should we follow?
-- For docs: Which areas are unclear? What should be added?
-- For accessibility: Which WCAG standards or best practices?
-
-```
-code sample or example
-```
-
-## Impact Analysis
-- **Risk Level**: Low / Medium / High
-- **Affected Components**: (e.g., cache system, SVG generators, API)
-- **Backward Compatibility**: (breaking/non-breaking)
-- **Testing Required**: Brief description of test scenarios
-
-## Acceptance Criteria
-- [ ] Criterion 1
-- [ ] Criterion 2
-- [ ] Criterion 3
-
-## Additional Context
-Benchmarks, references, related issues, or implementation notes.
+## Impact
+What components will be affected by this change?
