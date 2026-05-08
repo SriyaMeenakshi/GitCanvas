@@ -2,47 +2,25 @@
 name: Bug Report
 about: Report a bug to help us improve
 title: "[BUG] "
-labels: type:bug
+labels: bug
 assignees: ''
 ---
 
 ## Description
-A clear and concise description of what the bug is.
-
-## Component Affected
-- [ ] Card Generator (stats, contrib, lang, etc.)
-- [ ] Theme System
-- [ ] GitHub API Integration
-- [ ] AI/Roasting Service
-- [ ] Streamlit UI
-- [ ] REST API
-- [ ] Caching/Performance
-- [ ] Other: _____
-
-## Environment
-- **Python Version**: (e.g., 3.9, 3.10)
-- **Browser**: (if applicable, e.g., Chrome, Firefox)
-- **OS**: (e.g., Windows, macOS, Linux)
-- **GitCanvas Version/Branch**: (e.g., main, v1.0)
+A clear and concise description of the issue.
 
 ## Steps to Reproduce
 1. Go to '...'
-2. Click on '...'
-3. Scroll down to '...'
-4. See error
+2. Perform '...'
+3. Observe the error '...'
 
 ## Expected Behavior
-A clear and concise description of what you expected to happen.
+What should have happened.
 
-## Actual Behavior
-What actually happens instead.
-
-## Screenshots or Logs
-If applicable, add screenshots, error messages, or relevant logs.
-
-```
-paste error/log here
-```
+## Environment
+- OS: [e.g. Windows, macOS]
+- Browser: [e.g. Chrome, Firefox]
+- Python Version: [e.g. 3.11]
 
 ## Additional Context
-Any other context about the problem (e.g., specific user data that triggers it, recent changes).
+Add any other screenshots or logs here.
