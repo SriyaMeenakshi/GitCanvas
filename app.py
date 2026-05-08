@@ -155,8 +155,98 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- LIVE MARKDOWN PREVIEW PAGE LOGIC ---
+if st.session_state.get("show_md_preview", False):
+    st.title("📝 Live Markdown Preview")
+    st.markdown("Test out your generated GitCanvas components and build your profile README in real-time.")
+    
+    if st.button("🔙 Back to Profile Architect", key="back_to_main"):
+        st.session_state.show_md_preview = False
+        st.rerun()
+
+    DEMO_MARKDOWN = """# Hi there, I'm a GitCanvas User 👋
+
+This is a **Heading 1** (`# Heading 1`). 
+
+## This is a Heading 2 (`## Heading 2`)
+### This is a Heading 3 (`### Heading 3`)
+
+Welcome to my GitHub profile! Here is some **bold text** (`**bold text**`) and some *italic text* (`*italic text*`).
+
+You can also use `inline code` (with backticks) or create lists:
+- First item (`- First item`)
+- Second item
+  1. Numbered sub-item (`1. Numbered sub-item`)
+  2. Another sub-item
+
+Here is a [link to GitCanvas](https://github.com/devanshi14malhotra/GitCanvas) (`[title](url)`).
+"""
+
+    if "md_text" not in st.session_state:
+        st.session_state.md_text = DEMO_MARKDOWN
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Markdown Source")
+        st.caption("Type or paste your Markdown here. The preview will update automatically.")
+        
+        md_input = st.text_area(
+            "Source Code",
+            value=st.session_state.md_text,
+            height=500,
+            label_visibility="collapsed",
+            key="md_input_area"
+        )
+        
+        if md_input != st.session_state.md_text:
+            st.session_state.md_text = md_input
+            
+        c1, c2, c3 = st.columns([1, 1, 2])
+        if c1.button("🔄 Reset Demo", use_container_width=True):
+            st.session_state.md_text = DEMO_MARKDOWN
+            st.rerun()
+            
+        if c2.button("🗑️ Clear", use_container_width=True):
+            st.session_state.md_text = ""
+            st.rerun()
+        with st.expander("📖 Markdown Syntax Cheat Sheet"):
+            st.markdown("""
+            - **Bold**: `**text**`
+            - *Italic*: `*text*`
+            - [Link](url): `[title](https://...)`
+            - ![Image](url): `![alt text](https://...)`
+            - `Code`: `\\`inline code\\``
+            - Lists: `- item` or `1. item`
+            - Headers: `# H1`, `## H2`, `### H3`
+            """)
+    with col2:
+        st.subheader("Live Preview")
+        st.caption("How it will appear on GitHub")
+        
+        with st.container(border=True):
+            if st.session_state.md_text.strip():
+                st.markdown(st.session_state.md_text, unsafe_allow_html=True)
+            else:
+                st.info("Nothing to preview. Start typing on the left!")
+
+    st.stop()  # Stop rendering the rest of app.py
+# ----------------------------------------
+
 st.title("GitCanvas: Profile Architect 🛠️")
 st.markdown("### Craft a stunning GitHub profile card — pick a theme, preview instantly, and export in seconds.")
+
+TAB_NAMES = [
+    "Theme Gallery", "Main Stats", "Languages", "Top Repositories",
+    "Contributions", "GitHub Streak", "Trophy", "Achievement Room",
+    "Calendar Heatmap", "GitHub Actions", "Recent Activity", "AI Roast",
+    "AI Compliment", "Social Links", "Icons & Badges", "Visual Elements"
+]
+
+if st.button("📝 Open Live Markdown Preview", type="primary"):
+    st.session_state.show_md_preview = True
+    st.rerun()
+st.markdown("---")
 
 # Initialize session state for canvas
 if "canvas" not in st.session_state:
@@ -212,21 +302,9 @@ with st.sidebar:
         key=lambda name: name.replace("_", " ").lower(),
     )
     
-    # ── Custom Font Override (Issue #174) ────────────────────────────────────
-    st.markdown("**Font Override**")
-    FONT_OPTIONS = [
-        "Theme Default",
-        "Rubik", "Oswald", "Orbitron", "Fira Code",
-        "Dancing Script", "Great Vibes", "Pacifico"
-    ]
-    selected_font = st.selectbox(
-        "Card Font",
-        FONT_OPTIONS,
-        help="Small, high-contrast font set with visibly different styles."
-    )
-    # None means use theme default — only pass if user picked something
-    font_override = None if selected_font == "Theme Default" else selected_font
-    # ── End font override ─────────────────────────────────────────────────────
+    theme_selection_container = st.container()
+    
+    st.markdown("---")
     st.markdown("**Filter Themes**")
 
     # Search bar
@@ -285,13 +363,30 @@ with st.sidebar:
     except ValueError:
         default_idx = 0
 
-    selected_theme = st.selectbox(
-        "Select Theme",
-        filtered_theme_options,
-        index=default_idx,
-        key="current_theme_selection",
-        format_func=lambda name: name.replace("_", " "),
-    )
+    with theme_selection_container:
+        selected_theme = st.selectbox(
+            "Select Theme",
+            filtered_theme_options,
+            index=default_idx,
+            key="current_theme_selection",
+            format_func=lambda name: name.replace("_", " "),
+        )
+        
+        # ── Custom Font Override (Issue #174) ────────────────────────────────────
+        st.markdown("**Font Override**")
+        FONT_OPTIONS = [
+            "Theme Default",
+            "Rubik", "Oswald", "Orbitron", "Fira Code",
+            "Dancing Script", "Great Vibes", "Pacifico"
+        ]
+        selected_font = st.selectbox(
+            "Card Font",
+            FONT_OPTIONS,
+            help="Small, high-contrast font set with visibly different styles."
+        )
+        # None means use theme default — only pass if user picked something
+        font_override = None if selected_font == "Theme Default" else selected_font
+        # ── End font override ─────────────────────────────────────────────────────
     
     # Customization Expander
     # Ensure custom_colors exists even if the expander isn't opened
@@ -522,13 +617,7 @@ if font_override:
         custom_colors = {"font_family": font_override}
 
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
-    "Main Stats", "Languages", "Top Repositories", "Contributions",
-    "🔥 GitHub Streak", "🔗 Social Links", "Icons & Badges",
-    "🔥 AI Roast & Summary", "✨ AI Compliment", "Recent Activity",
-    "✨ Visual Elements", "🏆 Trophy", "🏆 Achievement Room",
-    "🎨 Theme Gallery", "📅 Calendar Heatmap", "⚙️ GitHub Actions"
-])
+tab14, tab1, tab2, tab3, tab4, tab5, tab12, tab13, tab15, tab16, tab10, tab8, tab9, tab6, tab7, tab11 = st.tabs(TAB_NAMES)
 
 def show_code_area(code_content, label="Markdown Code"):
     st.markdown(f"**{label}** (Copy below)")
